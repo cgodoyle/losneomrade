@@ -1,0 +1,39 @@
+[project]
+name = "losneomrade"  # Required
+version = "1.1.0"  # Required
+description = "Calculation of quick-clay release area"  # Optional
+readme = "README.md" # Optional
+requires-python = ">=3.7"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Cristian Godoy", email = "crgo@nve.no" } # Optional
+]
+
+
+dependencies = [ 
+                  "numpy",
+                  "pandas",
+                  "matplotlib",
+                  "scipy",
+                  "geopandas",
+                  "Shapely",
+                  "rasterio",
+                  "tqdm",
+                  "ipykernel",
+                  "requests",
+                  "urllib3",
+                  "Pillow",
+
+]
+
+# [project.optional-dependencies] # Optional
+# dev = ["check-manifest"]
+# test = ["coverage"]
+
+[project.urls]  # Optional
+"Source" = "https://github.com/cgodoyle/losneomrade"
+
+[tool.setuptools]
+[build-system]
+requires = ["setuptools>=43.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
