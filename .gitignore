@@ -32,3 +32,6 @@ venv/
 .idea/
 .vscode/
 *.pyc
+
+# Ipynb checkpoints
+.ipynb_checkpoints
