@@ -68,7 +68,7 @@ def run_retrogression(bounds: tuple,
         dem_array, rel, dem_profile["transform"], initial_release_depth=point_depth,
         min_slope=min_slope, min_height=min_height, min_length=min_length, mask=mask_msml)
 
-    akt = utils.polygonize_results(release, dem_profile).to_crs(epsg=25833)
+    akt = utils.polygonize_results(release, dem_profile, field="slope").to_crs(epsg=25833)
     if return_animation:
         akt = (akt, anim)
     return akt
