@@ -27,7 +27,7 @@ def run_retrogression(bounds: tuple,
                       min_length: float = 75,
                       custom_raster=None,
                       return_animation=False,
-                      **kwargs) -> gpd.GeoDataFrame:
+                      verbose=True) -> gpd.GeoDataFrame:
     """
     Wrapper function to run landslide retrogression (in a similar way to terrain_criteria.terrain_criteria). 
 
@@ -43,6 +43,7 @@ def run_retrogression(bounds: tuple,
         min_length (float): minimum length of the landslide (slope not checked within this length). Default is 75 m.
         custom_raster (np.ndarray): custom raster to use for the calculation. Default is None.
         return_animation (bool): wheter to return the animation of the retrogression. Default is False.
+        verbose (bool): wheter to print progress. Default is True.
 
     Returns:
         akt (gpd.GeoDataFrame): propagated release area of the landslide as a geodataframe
@@ -66,7 +67,8 @@ def run_retrogression(bounds: tuple,
 
     release, anim = landslide_retrogression(
         dem_array, rel, dem_profile["transform"], initial_release_depth=point_depth,
-        min_slope=min_slope, min_height=min_height, min_length=min_length, mask=mask_msml)
+        min_slope=min_slope, min_height=min_height, min_length=min_length, mask=mask_msml,
+        verbose=verbose)
 
     akt = utils.polygonize_results(release, dem_profile, field="slope").to_crs(epsg=25833)
     if return_animation:
@@ -82,7 +84,8 @@ def landslide_retrogression(dem: np.ndarray,
                             min_length: float = 200,
                             max_length: float = 2000,
                             initial_release_depth: float = 0,
-                            mask: np.ndarray = None):
+                            mask: np.ndarray = None,
+                            verbose: bool = False):
     """
     Propagates a landslide from a release area in a DEM. Stop criteria is defined by the maximum slope, minimum and
     maximum length of the landslide. The propagation is done iteratively, starting from the release area and moving
@@ -100,6 +103,8 @@ def landslide_retrogression(dem: np.ndarray,
         initial_release_depth (float): depth of the initial release area. Default is 0.
         #TODO: change to depth in the raster (as pixel value) instead.
         mask (np.ndarray): mask of the area outside analysis. Must have the same shape and same transform as the DEM.
+                            Default is None.
+        verbose (bool): wheter to print progress. Default is False.
 
 
     Returns:
@@ -107,9 +112,11 @@ def landslide_retrogression(dem: np.ndarray,
 
 
     """
-    print("runing landslide propagation...")
+    if verbose:
+        print("runing landslide propagation...")
     if abs(round(dem_transform[0], 2)) != abs(round(dem_transform[4], 2)):
-        print("Warning: DEM is not square")
+        if verbose:
+            print("Warning: DEM is not square")
 
     res = abs(dem_transform[0])
 
@@ -131,7 +138,7 @@ def landslide_retrogression(dem: np.ndarray,
     animation = []
     animation.append(initial_release)
 
-    with tqdm(total=0, desc="iterations") as pbar:
+    with tqdm(total=0, desc="iterations", disable=not verbose) as pbar:
         while n_iter < max_iter:
 
             buffered = create_buffer(release, 1)
@@ -168,8 +175,9 @@ def landslide_retrogression(dem: np.ndarray,
             pbar.update(1)
 
     if np.all(release == initial_release+create_buffer(initial_release, min_iter)):
-        print(f"Warning: no propagation besides the minimum length of {min_length} m / {min_iter+1} iterations")
-        print("returning the original release area")
+        if verbose:
+            print(f"Warning: no propagation besides the minimum length of {min_length} m / {min_iter+1} iterations")
+            print("returning the original release area")
         release = initial_release
     return release, animation
 
