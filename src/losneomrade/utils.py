@@ -388,15 +388,24 @@ def get_msml_mask(bounds: tuple) -> gpd.GeoDataFrame:
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
+    """
+    Modify the release mask by removing the no release areas and adding the supplementary release areas
+    Args:
+        release_mask: release mask as a geopandas dataframe
+        no_release_mask: no release mask as a geopandas dataframe
+        sup_release_mask: supplementary release mask as a geopandas dataframe
+
+    Returns:
+        release_mask: modified release mask
+    """
+
     if no_release_mask is not None:
         release_mask = gpd.GeoDataFrame(
-            geometry=release_mask.dissolve().difference(no_release_mask), crs=release_mask.crs)
+            geometry=release_mask.dissolve().difference(no_release_mask.dissolve()), crs=release_mask.crs)
+
     if sup_release_mask is not None:
         release_mask = gpd.GeoDataFrame(
-            pd.concat([release_mask, sup_release_mask], ignore_index=True), crs=release_mask.crs)
-        # union didn't work properly, i leave it here for future reference, but TODO: remove it
-        # release_mask = gpd.GeoDataFrame(
-        #     geometry=release_mask.dissolve().union(sup_release_mask), crs=release_mask.crs)
+            geometry=release_mask.dissolve().union(sup_release_mask.dissolve()), crs=release_mask.crs)
     return release_mask
 
 
