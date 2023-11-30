@@ -396,6 +396,16 @@ def get_msml_mask(bounds: tuple, dem_profile: rasterio.profiles.Profile = None):
         return mask_array
 
 
+def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
+    if no_release_mask is not None:
+        release_mask = gpd.GeoDataFrame(
+            geometry=release_mask.dissolve().difference(no_release_mask), crs=release_mask.crs)
+    if sup_release_mask is not None:
+        release_mask = gpd.GeoDataFrame(
+            geometry=release_mask.dissolve().union(sup_release_mask), crs=release_mask.crs)
+    return release_mask
+
+
 def generate_windows(custom_raster: str):
     """
     Generate windows from a raster in the same way get_hoydedata does.
