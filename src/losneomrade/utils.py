@@ -393,7 +393,10 @@ def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, 
             geometry=release_mask.dissolve().difference(no_release_mask), crs=release_mask.crs)
     if sup_release_mask is not None:
         release_mask = gpd.GeoDataFrame(
-            geometry=release_mask.dissolve().union(sup_release_mask), crs=release_mask.crs)
+            pd.concat([release_mask, sup_release_mask], ignore_index=True), crs=release_mask.crs)
+        # union didn't work properly, i leave it here for future reference, but TODO: remove it
+        # release_mask = gpd.GeoDataFrame(
+        #     geometry=release_mask.dissolve().union(sup_release_mask), crs=release_mask.crs)
     return release_mask
 
 
