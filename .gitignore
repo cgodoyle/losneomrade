@@ -35,3 +35,6 @@ venv/
 
 # Ipynb checkpoints
 .ipynb_checkpoints
+
+# Test notebooks
+notebooks_test/
