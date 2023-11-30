@@ -59,7 +59,8 @@ def run_retrogression(bounds: tuple,
     dem_profile = dem_data["profile"]
 
     if clip_to_msml:
-        mask_msml = utils.get_msml_mask((bounds[0], bounds[2], bounds[1], bounds[3]), dem_profile)
+        mask_gpd = utils.get_msml_mask((bounds[0], bounds[2], bounds[1], bounds[3]))
+        mask_msml = utils.rasterize_shape(mask_gpd, dem_profile)
     else:
         mask_msml = None
 

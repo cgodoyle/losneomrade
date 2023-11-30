@@ -203,7 +203,7 @@ def clip_results_to_msml(results_gpd: gpd.GeoDataFrame, bounds: tuple) -> gpd.Ge
     xmin, xmax, ymin, ymax = bounds
 
     # concatenate masks
-    mask = utils.get_msml_mask(bounds=(xmin, ymin, xmax, ymax), dem_profile=None)
+    mask = utils.get_msml_mask(bounds=(xmin, ymin, xmax, ymax))
 
     # clip results
     results_gpd = gpd.clip(results_gpd, mask)
