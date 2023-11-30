@@ -346,15 +346,14 @@ def rasterize_shape(release_shp, dem_profile: rasterio.profiles.Profile) -> np.n
     return rasterized
 
 
-def get_msml_mask(bounds: tuple, dem_profile: rasterio.profiles.Profile = None):
+def get_msml_mask(bounds: tuple) -> gpd.GeoDataFrame:
     """
     Get the MSML mask as an array for the given bounds
     Args:
         bounds: tuple with the bounds (xmin, ymin, xmax, ymax)
-        dem_profile: profile of the dem. If None, returns the mask as a geopandas dataframe
 
     Returns:
-        mask_array: array with the MSML mask or a geopandas dataframe if dem_profile is None
+        mask: geopandas dataframe if dem_profile is None
     """
 
     with tempfile.TemporaryDirectory() as tempdir:
@@ -385,15 +384,7 @@ def get_msml_mask(bounds: tuple, dem_profile: rasterio.profiles.Profile = None):
 
         # concatenate masks
         mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(epsg=25833)
-        if dem_profile is None:
-            return mask_gpd
-
-        if len(mask_gpd) == 0:
-            mask_array = None
-        else:
-            mask_array = rasterize_shape(mask_gpd, dem_profile)
-
-        return mask_array
+        return mask_gpd
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
