@@ -90,6 +90,7 @@ def terrain_criteria(bounds: tuple,
                      point_depth: float = 0.0,
                      clip_to_msml=False,
                      h_min: float = 5,
+                     reclassify_results=True,
                      custom_raster=None) -> gpd.GeoDataFrame:
     """
     Run calculation of terrain criteria
@@ -128,7 +129,7 @@ def terrain_criteria(bounds: tuple,
         with rasterio.open(f"{out_filename}.tif", "w+", **raster_profile) as out:
             for index, window in enumerate(windows):
                 results_window = compute_from_windows(windows_dems[index], windows_transforms[index], points,
-                                                      nan_value, h_min)
+                                                      nan_value, h_min, reclassify_results=reclassify_results)
                 out.write(results_window, window=window, indexes=1)
 
             result_raster = out.read(1)
