@@ -19,7 +19,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 HOYDEDATA_LAYER = "NHM_DTM_25833"
 
 
-def get_hoydedata(bounds: tuple, layer: str = HOYDEDATA_LAYER, res: int = 5, nodata: int = -9999) -> dict:
+def get_hoydedata(bounds: tuple, layer: str = HOYDEDATA_LAYER, res: int = 5, nodata: int = -9999, max_retries=5) -> dict:
     """
     Function for downloading DEM from www.høydedata.no.
 
@@ -55,12 +55,22 @@ def get_hoydedata(bounds: tuple, layer: str = HOYDEDATA_LAYER, res: int = 5, nod
     )
 
     # Open the request output with rasterio and save elevation array and transform
+    attempts = 0
+    wait_time = 1
+    while attempts < max_retries:
+        try:
+            tif_bytes = urlopen(request_url).read()
+            break
+        except Exception as e:
+            attempts += 1
+            time.sleep(wait_time)
+    else:
+        raise Exception("Error (Probably area requested is too big/small or høydedata is down)")
+
+    windows_dems = []
+    windows_transforms = []
+
     try:
-        tif_bytes = urlopen(request_url).read()
-
-        windows_dems = []
-        windows_transforms = []
-
         with MemoryFile(tif_bytes) as memfile:
             with memfile.open() as dataset:
                 dataset_profile = dataset.profile
