@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 import warnings
 from urllib.request import urlopen
 
