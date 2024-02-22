@@ -382,6 +382,7 @@ def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
 
     response = requests.get(url_nve_msml, params=params)
     data = response.json()
+    all_results.extend(data.get("features", []))
 
     while data.get("exceededTransferLimit"):
         params["resultOffset"] = params.get("resultOffset", 0) + results_offset
@@ -394,7 +395,7 @@ def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
         "features": all_results
     }
 
-    mask_msml = gpd.GeoDataFrame.from_features(geojson_result, crs=4326).to_crs(25833)
+    mask_msml = gpd.GeoDataFrame.from_features(geojson_result)
     params["resultOffset"] = 0
 
     response = requests.get(url_nve_aumg, params=params)
@@ -410,9 +411,11 @@ def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
         "features": all_results
     }
 
-    mask_aumg = gpd.GeoDataFrame.from_features(geojson_result, crs=4326).to_crs(25833)
+    mask_aumg = gpd.GeoDataFrame.from_features(geojson_result)
 
-    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(epsg=25833)
+    if mask_msml.empty and mask_aumg.empty:
+        return gpd.GeoDataFrame()
+    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(4326).to_crs(25833)
     return mask_gpd.dissolve()
 
 
