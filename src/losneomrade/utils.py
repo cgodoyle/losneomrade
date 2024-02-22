@@ -2,6 +2,7 @@ import os
 import tempfile
 import time
 import warnings
+import requests
 from urllib.request import urlopen
 
 import rasterio
@@ -357,7 +358,7 @@ def rasterize_shape(release_shp, dem_profile: rasterio.profiles.Profile) -> np.n
     return rasterized
 
 
-def get_msml_mask(bounds: tuple) -> gpd.GeoDataFrame:
+def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
     """
     Get the MSML mask as an array for the given bounds
     Args:
@@ -367,35 +368,52 @@ def get_msml_mask(bounds: tuple) -> gpd.GeoDataFrame:
         mask: geopandas dataframe if dem_profile is None
     """
 
-    with tempfile.TemporaryDirectory() as tempdir:
-        xmin, ymin, xmax, ymax = bounds
+    xmin, ymin, xmax, ymax = bounds
 
-        # Get MSML mask
-        url_nve_msml = "https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/7/query?" \
-                       "geometry=xmin%3A+{}%2C+ymin%3A+{}%2C+xmax%3A+{}%2C+ymax%3A+{}&" \
-                       "geometryType=esriGeometryEnvelope&f=geojson"
-        query_msml_mask = url_nve_msml.format(xmin, ymin, xmax, ymax)
-        response = urlopen(query_msml_mask)
-        json_mask = response.read()
+    url_nve_msml = "https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/7/query"
+    url_nve_aumg = "https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/8/query"
 
-        with open(os.path.join(tempdir, "msml_mask.json"), "wb") as file_json_mask:
-            file_json_mask.write(json_mask)
-        mask_msml = gpd.read_file(os.path.join(tempdir, "msml_mask.json"), driver='GeoJSON').to_crs(epsg=25833)
+    params = {
+        "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
+        "geometryType": "esriGeometryEnvelope",
+        "f": "geojson"
+    }
+    all_results = []
 
-        # Get Areal under MG mask
-        url_nve_aumg = "https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/8/query?" \
-                       "geometry=xmin%3A+{}%2C+ymin%3A+{}%2C+xmax%3A+{}%2C+ymax%3A+{}&" \
-                       "geometryType=esriGeometryEnvelope&f=geojson"
-        query_aumg_mask = url_nve_aumg.format(xmin, ymin, xmax, ymax)
-        response_2 = urlopen(query_aumg_mask)
-        json_mask_2 = response_2.read()
-        with open(os.path.join(tempdir, "marin_mask.json"), "wb") as file_json_mask:
-            file_json_mask.write(json_mask_2)
-        mask_aumg = gpd.read_file(os.path.join(tempdir, "marin_mask.json"), driver='GeoJSON').to_crs(epsg=25833)
+    response = requests.get(url_nve_msml, params=params)
+    data = response.json()
 
-        # concatenate masks
-        mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(epsg=25833)
-        return mask_gpd
+    while data.get("exceededTransferLimit"):
+        params["resultOffset"] = params.get("resultOffset", 0) + results_offset
+        response = requests.get(url_nve_msml, params=params)
+        data = response.json()
+        all_results.extend(data.get("features", []))
+
+    geojson_result = {
+        "type": "FeatureCollection",
+        "features": all_results
+    }
+
+    mask_msml = gpd.GeoDataFrame.from_features(geojson_result, crs=4326).to_crs(25833)
+    params["resultOffset"] = 0
+
+    response = requests.get(url_nve_aumg, params=params)
+    data = response.json()
+    while data.get("exceededTransferLimit"):
+        params["resultOffset"] = params.get("resultOffset", 0) + results_offset
+        response = requests.get(url_nve_msml, params=params)
+        data = response.json()
+        all_results.extend(data.get("features", []))
+
+    geojson_result = {
+        "type": "FeatureCollection",
+        "features": all_results
+    }
+
+    mask_aumg = gpd.GeoDataFrame.from_features(geojson_result, crs=4326).to_crs(25833)
+
+    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(epsg=25833)
+    return mask_gpd.dissolve()
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
