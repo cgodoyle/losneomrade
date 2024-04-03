@@ -67,6 +67,7 @@ def get_hoydedata(bounds: tuple, layer: str = HOYDEDATA_LAYER, res: int = 5, nod
             attempts += 1
             time.sleep(wait_time)
     else:
+        print(request_url)
         raise Exception("Error (Probably area requested is too big/small or høydedata is down)")
 
     windows_dems = []
@@ -86,6 +87,7 @@ def get_hoydedata(bounds: tuple, layer: str = HOYDEDATA_LAYER, res: int = 5, nod
                     )
 
     except Exception as e:
+        print(request_url)
         print("Error (Probably area requested is too big/small or høydedata is down)")
         raise
 
@@ -368,55 +370,52 @@ def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
         mask: geopandas dataframe if dem_profile is None
     """
 
+    mask_msml = get_maringrense(bounds, "msml", results_offset)
+    mask_aumg = get_maringrense(bounds, "area_under_mg", results_offset)
+    if mask_msml.empty and mask_aumg.empty:
+        return gpd.GeoDataFrame(geometry=[])
+    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(4326).to_crs(25833)
+    return gpd.clip(mask_gpd,bounds).dissolve()
+
+
+def get_maringrense(bounds, layer, results_offset=100):
+    """
+    Retrieves the MarinGrense data within the specified bounds and layer.
+
+    Args:
+        bounds (tuple): The bounding box coordinates (xmin, ymin, xmax, ymax).
+        layer (str): The layer name to query. Valid options are "msml" and "area_under_mg".
+        results_offset (int, optional): The number of results to offset in each request. Defaults to 100.
+
+    Returns:
+        gpd.GeoDataFrame: A GeoDataFrame containing the MarinGrense data.
+
+    """
+
     xmin, ymin, xmax, ymax = bounds
 
-    url_nve_msml = "https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/7/query"
-    url_nve_aumg = "https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/8/query"
+    layer_dict = {"msml": 7, "area_under_mg": 8}
+    layer_nr = layer_dict[layer]
+
+    url = f"https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/{layer_nr}/query"
 
     params = {
         "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
         "geometryType": "esriGeometryEnvelope",
         "f": "geojson"
     }
-    all_results = []
 
-    response = requests.get(url_nve_msml, params=params)
+    response = requests.get(url, params=params)
     data = response.json()
-    all_results.extend(data.get("features", []))
+    features = data.get("features", [])
 
     while data.get("exceededTransferLimit"):
         params["resultOffset"] = params.get("resultOffset", 0) + results_offset
-        response = requests.get(url_nve_msml, params=params)
+        response = requests.get(url, params=params)
         data = response.json()
-        all_results.extend(data.get("features", []))
+        features.extend(data.get("features", []))
 
-    geojson_result = {
-        "type": "FeatureCollection",
-        "features": all_results
-    }
-
-    mask_msml = gpd.GeoDataFrame.from_features(geojson_result)
-    params["resultOffset"] = 0
-
-    response = requests.get(url_nve_aumg, params=params)
-    data = response.json()
-    while data.get("exceededTransferLimit"):
-        params["resultOffset"] = params.get("resultOffset", 0) + results_offset
-        response = requests.get(url_nve_msml, params=params)
-        data = response.json()
-        all_results.extend(data.get("features", []))
-
-    geojson_result = {
-        "type": "FeatureCollection",
-        "features": all_results
-    }
-
-    mask_aumg = gpd.GeoDataFrame.from_features(geojson_result)
-
-    if mask_msml.empty and mask_aumg.empty:
-        return gpd.GeoDataFrame()
-    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(4326).to_crs(25833)
-    return mask_gpd.dissolve()
+    return gpd.GeoDataFrame.from_features(features)
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
