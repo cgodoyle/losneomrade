@@ -374,7 +374,7 @@ def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
     mask_aumg = get_maringrense(bounds, "area_under_mg", results_offset)
     if mask_msml.empty and mask_aumg.empty:
         return gpd.GeoDataFrame(geometry=[])
-    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True)).set_crs(4326).to_crs(25833)
+    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True))
     return gpd.clip(mask_gpd,bounds).dissolve()
 
 
@@ -414,8 +414,9 @@ def get_maringrense(bounds, layer, results_offset=100):
         response = requests.get(url, params=params)
         data = response.json()
         features.extend(data.get("features", []))
-
-    return gpd.GeoDataFrame.from_features(features)
+    if len(features) == 0:
+        return gpd.GeoDataFrame(geometry=[])
+    return gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
