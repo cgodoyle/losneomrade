@@ -34,12 +34,12 @@ def run_terrain_criteria(bounds: tuple,
     Returns: geodataframe with the polygonized terrain criteria results
     """
     if isinstance(source, gpd.GeoDataFrame):
-        if np.all(source.geom_type == "LineString"):
+        if np.all(source.geom_type.isin(["LineString", "MultiLineString"])):
             source_points = generate_source_points(source)
         elif np.all(source.geom_type == "Point"):
             source_points = source.get_coordinates().values
         else:
-            raise ValueError("source must be a geodataframe of LineStrings or Points") # I left this so we can track possible errors
+            raise ValueError("source must be a geodataframe of LineStrings/MultiLineStrings or Points") # I left this so we can track possible errors
     elif isinstance(source, np.ndarray):
         source_points = source
 
