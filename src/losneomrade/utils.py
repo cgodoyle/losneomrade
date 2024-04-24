@@ -12,6 +12,8 @@ import plotly.graph_objects as go
 from rasterio import MemoryFile
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
+from shapely.geometry.base import BaseGeometry
+from typing import Union, List
 import pandas as pd
 
 
@@ -332,11 +334,11 @@ def polygonize_results(result_array: np.ndarray, dem_profile: rasterio.profiles.
     return gpd_polygonized_raster
 
 
-def rasterize_shape(release_shp, dem_profile: rasterio.profiles.Profile) -> np.ndarray:
+def rasterize_shape(shapes:Union[gpd.GeoDataFrame, List[BaseGeometry]], dem_profile: rasterio.profiles.Profile) -> np.ndarray:
     """
     Rasterize the release area
     Args:
-        release_shp: release area as a geopandas dataframe
+        shapes: shapes as a geopandas dataframe or a shapely geometry
         dem_profile: profile of the dem
 
     Returns:
@@ -345,8 +347,12 @@ def rasterize_shape(release_shp, dem_profile: rasterio.profiles.Profile) -> np.n
     dem_height = dem_profile['height']
     dem_width = dem_profile['width']
     dem_transform = dem_profile['transform']
-
-    geom = [shapes_ii for shapes_ii in release_shp.geometry]
+    if isinstance(shapes, gpd.GeoDataFrame):
+        geom = [shapes_ii for shapes_ii in shapes.geometry]
+    elif all(isinstance(shape, BaseGeometry) for shape in shapes):
+        geom = shapes
+    else:
+        raise ValueError("shapes must be either a GeoDataFrame or a list with geometries")
 
     rasterized = rasterize(geom,
                            out_shape=(dem_height, dem_width),
