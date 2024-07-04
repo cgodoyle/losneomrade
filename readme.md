@@ -61,7 +61,7 @@ tc = terrain_criteria.run_terrain_criteria(bounds=(xmin, xmax, ymin, ymax),
 
 
 # retrogression
-sourcepoints = gpd.GeodataFrame(
+sourcepoints = gpd.GeoDataFrame(
     geometry=gpd.points_from_xy(points[:,0], points[:,1]),
     crs=25833,
     )
