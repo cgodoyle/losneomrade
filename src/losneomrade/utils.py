@@ -323,7 +323,7 @@ def polygonize_results(result_array: np.ndarray, dem_profile: rasterio.profiles.
     raster_transform = dem_profile['transform']
     raster_crs = dem_profile['crs']
 
-    results_binary = (result_array >= threshold_value).astype(int)
+    results_binary = (result_array >= threshold_value).astype("int16")
 
     results = ({"properties": {"id": i, field: int(v)}, "geometry": s}
                for i, (s, v) in enumerate(shapes(results_binary, mask=None, transform=raster_transform)))
