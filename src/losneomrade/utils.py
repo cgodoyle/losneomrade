@@ -8,7 +8,6 @@ from urllib.request import urlopen
 import rasterio
 import geopandas as gpd
 import numpy as np
-import plotly.graph_objects as go
 from rasterio import MemoryFile
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
@@ -255,6 +254,8 @@ def generate_plotly_profile(prof, max_depth=None, kp_depth=0, limit=15):
         fig: plotly figure
 
     """
+    import plotly.graph_objects as go
+
     base_depth = (prof[:, -2].min() - (prof[:, -2].max() - prof[:, -2].min())) if max_depth is None else max_depth
     base = np.ones_like(prof[:, -2]) * base_depth
 
@@ -423,6 +424,29 @@ def get_maringrense(bounds, layer, results_offset=100):
     if len(features) == 0:
         return gpd.GeoDataFrame(geometry=[])
     return gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
+
+
+def check_maringgrense():
+    xmin, ymin, xmax, ymax = 265122.0, 6648110.0, 266151.0, 6648761.0
+    layer_dict = {"msml": 7, "area_under_mg": 8}
+
+    params = {
+        "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
+        "geometryType": "esriGeometryEnvelope",
+        "f": "geojson"
+    }
+
+    for layer in ["msml", "area_under_mg"]:
+        layer_nr = layer_dict[layer]
+
+        url = f"https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/{layer_nr}/query"
+
+        response = requests.get(url, params=params)
+        data = response.json()
+        if data.get("error") is not None:
+            return False
+        else:
+            return True
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
