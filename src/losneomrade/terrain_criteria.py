@@ -136,7 +136,7 @@ def terrain_criteria(bounds: tuple,
 
             result_raster = out.read(1)
             raster_transform = out.transform
-    except Exception as e:
+    except Exception:
         print("Error writing output raster.")
         raise
 
