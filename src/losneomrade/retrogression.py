@@ -9,7 +9,7 @@ import plotly.graph_objects as go
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 from scipy.ndimage import binary_dilation
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 from PIL import Image
 
 from . import utils
