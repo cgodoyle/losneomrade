@@ -426,7 +426,7 @@ def get_maringrense(bounds, layer, results_offset=100):
     return gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
 
 
-def check_maringgrense():
+def check_maringrense():
     xmin, ymin, xmax, ymax = 265122.0, 6648110.0, 266151.0, 6648761.0
     layer_dict = {"msml": 7, "area_under_mg": 8}
 
@@ -441,8 +441,11 @@ def check_maringgrense():
 
         url = f"https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/{layer_nr}/query"
 
-        response = requests.get(url, params=params)
-        data = response.json()
+        try:
+            response = requests.get(url, params=params)
+            data = response.json()
+        except requests.JSONDecodeError:
+            return False
         if data.get("error") is not None:
             return False
         else:
