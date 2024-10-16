@@ -3,7 +3,7 @@ import tempfile
 import time
 import warnings
 import requests
-from urllib.request import urlopen
+from urllib.request import urlopen, HTTPError
 
 import rasterio
 import geopandas as gpd
@@ -190,6 +190,11 @@ def profile(line, dtm_layer=HOYDEDATA_LAYER, nodata=-9999, fra_crs=4326, to_crs=
     Returns: numpy array with X, Y, Z, M values
 
     """
+    retries = 10
+    wait = 5
+
+    attempt = 0
+
     gdf = gpd.GeoDataFrame(
         index=[0], crs=f"epsg:{int(fra_crs)}", geometry=[line]
     ).to_crs(epsg=to_crs)
@@ -216,8 +221,17 @@ def profile(line, dtm_layer=HOYDEDATA_LAYER, nodata=-9999, fra_crs=4326, to_crs=
         f"&interpolation=+RSP_BilinearInterpolation&compression=&"
         f"compressionQuality=&bandIds=&mosaicRule=&renderingRule=&f=image"
     )
-    tif_bytes = urlopen(request_url).read()
-
+    while attempt < retries:
+        try:
+            tif_bytes = urlopen(request_url).read()
+            break
+        except HTTPError as e:
+            
+            attempt += 1
+            # print(f"Attempt {attempt} failed. Error: {e}")
+            time.sleep(wait)
+    if attempt == retries:
+        raise Exception("HTTPError")
     z_dem = []
 
     try:
