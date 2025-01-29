@@ -19,6 +19,8 @@ def run_terrain_criteria(bounds: tuple,
                          source_depth: float = 0.0,
                          clip_to_msml: bool = False,
                          h_min: float = 5,
+                         reclassify_results=True,
+                         classes=None,
                          custom_raster=None) -> gpd.GeoDataFrame:
     """
     Wrapper function for running terrain criteria calculations
@@ -29,6 +31,8 @@ def run_terrain_criteria(bounds: tuple,
         source_depth: depth of the source points
         clip_to_msml: wheter to clip against MSML (sammenhengede forekomster).
         h_min: minumun height for calculations, default 5m
+        reclassify_results: wheter to return a classified result or a continuous slope value
+        classes: list with the slope values that define the classes to use for reclassification
         custom_raster: path to a custom raster file (tif) to use for calculations
 
     Returns: geodataframe with the polygonized terrain criteria results
@@ -51,6 +55,8 @@ def run_terrain_criteria(bounds: tuple,
             out_filename=tempdir+'/tc',
             clip_to_msml=clip_to_msml,
             h_min=h_min,
+            reclassify_results=reclassify_results,
+            classes=classes,
             custom_raster=custom_raster
         )
 
@@ -93,6 +99,7 @@ def terrain_criteria(bounds: tuple,
                      clip_to_msml=False,
                      h_min: float = 5,
                      reclassify_results=True,
+                     classes=None,
                      custom_raster=None) -> gpd.GeoDataFrame:
     """
     Run calculation of terrain criteria
@@ -102,6 +109,10 @@ def terrain_criteria(bounds: tuple,
         out_filename: path to save results (without extention)
         point_depth: depth of the source points
         clip_to_msml: wheter to clip against MSML (sammenhengede forekomster).
+        h_min: minumun height for calculations, default 5m
+        reclassify_results: wheter to return a classified result or a continuous slope value
+        classes: list with the slope values that define the classes to use for reclassification
+        custom_raster: path to a custom raster file (tif) to use for calculations
 
     Returns: Saves a tif and a GeoJson file with the results (areas that fills the terrain criteria), returns
              a geodataframe.
@@ -131,7 +142,8 @@ def terrain_criteria(bounds: tuple,
         with rasterio.open(f"{out_filename}.tif", "w+", **raster_profile) as out:
             for index, window in enumerate(windows):
                 results_window = compute_from_windows(windows_dems[index], windows_transforms[index], points,
-                                                      nan_value, h_min, reclassify_results=reclassify_results)
+                                                      nan_value, h_min, reclassify_results=reclassify_results, 
+                                                      classes=classes)
                 out.write(results_window, window=window, indexes=1)
 
             result_raster = out.read(1)
@@ -148,7 +160,8 @@ def terrain_criteria(bounds: tuple,
     return gpd_polygonized_raster
 
 
-def compute_from_windows(dem_data, transform, source_points, nan_value=-9999, h_min=5, reclassify_results=True):
+def compute_from_windows(dem_data, transform, source_points, nan_value=-9999, h_min=5, reclassify_results=True,
+                         classes=None):
     """
     Computes the terrain criteria for a given raster window
     Args:
@@ -158,6 +171,7 @@ def compute_from_windows(dem_data, transform, source_points, nan_value=-9999, h_
         nan_value: raster's nodata value
         h_min: minumun height for calculations, default 5m
         reclassify_results: wheter to return a classified result or a continuous slope value
+        classes: list with the slope values that define the classes to use for reclassification
 
     Returns: numpy array with classified (or raw) slopes values
 
@@ -173,12 +187,12 @@ def compute_from_windows(dem_data, transform, source_points, nan_value=-9999, h_
     results_slope = utils.compute_slope(coords, source_points, h_min=h_min, nodata=nan_value).reshape(dem_data.shape)
 
     if reclassify_results:
-        results_slope = reclass(results_slope)
+        results_slope = reclass(results_slope, classes)
 
     return results_slope
 
 
-def reclass(matrix: np.ndarray) -> np.ndarray:
+def reclass(matrix: np.ndarray, classes: list=None) -> np.ndarray:
     """
     Reclassifies the terrain criteria results
     Args:
@@ -186,7 +200,8 @@ def reclass(matrix: np.ndarray) -> np.ndarray:
 
     Returns: numpy array with the reclassified terrain criteria results
     """
-    classes = [0.05, 0.067, 0.2, 0.33, 1.7, 1000]
+    
+    classes = [0.05, 0.067, 0.2, 0.33, 1.7, 1000] if classes is None else classes
     #         1:20   1:15   1:5   1:3  60 degrees
     reclass_vectorized = np.vectorize(lambda x: bisect.bisect_left(classes, x))
 
