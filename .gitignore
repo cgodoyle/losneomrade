@@ -38,3 +38,4 @@ venv/
 
 # Test notebooks
 notebooks_test/
+*no_github*.*
