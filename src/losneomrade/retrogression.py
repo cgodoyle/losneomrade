@@ -1,16 +1,18 @@
 import io
 import os
 import warnings
+from typing import Union
 
-import rasterio
-import numpy as np
 import geopandas as gpd
+import numpy as np
+import pandas as pd
 import plotly.graph_objects as go
+import rasterio
 from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
+from PIL import Image
 from scipy.ndimage import binary_dilation
 from tqdm.notebook import tqdm
-from PIL import Image
 
 from . import utils
 
@@ -76,6 +78,81 @@ def run_retrogression(bounds: tuple,
         akt = (akt, anim)
     return akt
 
+
+def run_retrogression_with_initial_landslide(
+        bounds: tuple,
+        rel_shape: gpd.GeoDataFrame,
+        point_depth: float = 0.0,
+        clip_to_msml=False,
+        ini_slope: float = 1 / 4,
+        retro_slope: float = 1 / 15,
+        min_height: float = 5,
+        min_length: float = 75,
+        custom_raster=None,
+        return_animation=False,
+        
+):
+    if custom_raster is None:
+        dem_data = utils.get_hoydedata(bounds, )
+    else:
+        dem_data = utils.generate_windows(custom_raster)
+
+    dem_array = dem_data["full_array"]
+    dem_profile = dem_data["profile"]
+
+    if clip_to_msml:
+        mask_gpd = utils.get_msml_mask((bounds[0], bounds[2], bounds[1], bounds[3]))
+        mask_msml = utils.rasterize_shape(mask_gpd, dem_profile)
+    else:
+        mask_msml = None
+
+    rel = utils.rasterize_shape(rel_shape, dem_profile)
+
+    min_length_first = min_length * ini_slope
+    min_length_second = min_length - min_length_first
+
+    release_first, animation_first = landslide_retrogression(
+        dem_array, 
+        rel, dem_profile["transform"], 
+        initial_release_depth=point_depth,
+        min_slope=ini_slope, 
+        min_height=min_height, 
+        min_length=min_length_first, 
+        mask=mask_msml,
+        verbose=False)
+    
+    if np.all(release_first == rel):
+        akt = gpd.GeoDataFrame(columns=["geometry", "slope"], crs=25833)
+        animation_second = []
+
+    else:
+        release_second, animation_second = landslide_retrogression(
+            dem=dem_array,
+            initial_release=release_first,
+            dem_transform=dem_profile["transform"],
+            min_slope=retro_slope,
+            min_height=0,
+            min_length=min_length_second,
+            max_length=2000,
+            initial_release_depth=0,
+            mask=mask_msml,
+            verbose=False
+        )
+        
+
+        first_release = utils.polygonize_results(release_first, dem_profile, field="slope").to_crs(epsg=25833)
+        first_release["slope"] = ini_slope
+        second_release = utils.polygonize_results(release_second, dem_profile, field="slope").to_crs(epsg=25833)
+        second_release["slope"] = retro_slope
+        akt = pd.concat([first_release, second_release], ignore_index=True)
+
+
+    if return_animation:
+        animation = animation_first + [animation_first[-1] for _ in range(100)] + animation_second
+        akt = (akt, animation)
+    return akt
+
+  
 
 def landslide_retrogression(dem: np.ndarray,
                             initial_release: np.ndarray,
@@ -298,8 +375,8 @@ def plot_hillshade_overlay(dem: np.ndarray,
         fig (matplotlib.figure.Figure): figure object
 
     """
-    from matplotlib.colors import LightSource
     import matplotlib.colors as mcolors
+    from matplotlib.colors import LightSource
     current_backend = plt.get_backend()
     plt.switch_backend('Agg')
 
