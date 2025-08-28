@@ -12,6 +12,7 @@ from rasterio import MemoryFile
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
 from shapely.geometry.base import BaseGeometry
+from shapely.geometry import box
 from typing import Union, List
 import pandas as pd
 
@@ -464,6 +465,64 @@ def check_maringrense():
             return False
         else:
             return True
+
+
+def get_ar5_mask(bounds, results_offset=100):
+    """
+    Retrieves the AR5 data for "grunnlendt" and "fjell i dagen" within the specified bounds.
+
+    """
+
+    xmin, ymin, xmax, ymax = bounds
+
+
+    url = "https://gis3.nve.no/map/rest/services/Mapservices/FKB/MapServer/2/query"
+
+    params = {
+        "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
+        "geometryType": "esriGeometryEnvelope",
+        "outFields": "grunnforhold",
+        "f": "geojson"
+    }
+
+    response = requests.get(url, params=params)
+    # print(response.url)
+    data = response.json()
+    features = data.get("features", [])
+
+    while data.get("exceededTransferLimit"):
+        params["resultOffset"] = params.get("resultOffset", 0) + results_offset
+        response = requests.get(url, params=params)
+        data = response.json()
+        features.extend(data.get("features", []))
+    if len(features) == 0:
+        return gpd.GeoDataFrame(geometry=[])
+    gdf = gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
+    gdf = gdf.query("grunnforhold in (42, 43)").copy()
+    # 42: fjell i dagen, 43: grunnlendt (https://register.geonorge.no/sosi-kodelister/fkb/ar5/5.0/arealressursgrunnforhold)
+    gdf = gdf.clip(bounds)
+
+    return gdf
+
+
+def get_clipping_mask(bounds, msml=True, ar5=True):
+    if not msml and not ar5:
+        return None
+    mask_msml = get_msml_mask(bounds) if msml else None
+    if not ar5:
+        return mask_msml
+    mask_ar5 = get_ar5_mask(bounds) if ar5 else None
+
+    base_mask = mask_msml if mask_msml is not None else gpd.GeoDataFrame(geometry=[box(*bounds)], crs=25833)
+    try:
+        mask = base_mask.overlay(mask_ar5, how='difference')
+    except Exception as e:
+        print(e)
+        print(len(mask_ar5))
+        print(len(base_mask))
+        raise
+    return mask
+
 
 
 def modify_release_mask(release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None):
