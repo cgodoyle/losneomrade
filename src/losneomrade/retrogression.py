@@ -84,6 +84,7 @@ def run_retrogression_with_initial_landslide(
         rel_shape: gpd.GeoDataFrame,
         point_depth: float = 0.0,
         clip_to_msml=False,
+        custom_msml: gpd.GeoDataFrame=None,
         ini_slope: float = 1 / 4,
         retro_slope: float = 1 / 15,
         min_height: float = 5,
@@ -121,7 +122,10 @@ def run_retrogression_with_initial_landslide(
         mask_msml = utils.rasterize_shape(mask_gpd, dem_profile)
 
     else:
-        mask_msml = None
+        if custom_msml is not None:
+            mask_msml = utils.rasterize_shape(custom_msml, dem_profile)
+        else:
+            mask_msml = None
 
     rel = utils.rasterize_shape(rel_shape, dem_profile)
 
@@ -139,8 +143,8 @@ def run_retrogression_with_initial_landslide(
         mask=mask_msml,
         verbose=False)
 
-    
     if np.all(release_first == rel) or release_first.sum() == 0:
+        
         akt = gpd.GeoDataFrame(columns=["geometry", "slope"], crs=25833)
         animation_second = []
 
@@ -172,6 +176,24 @@ def run_retrogression_with_initial_landslide(
     return akt
 
   
+def apply_mask(array: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """
+    Apply a binary mask to a numpy array.
+
+    Args:
+        array (np.ndarray): Input array.
+        mask (np.ndarray): Binary mask.
+
+    Returns:
+        np.ndarray: Masked array.
+    """
+    if mask is None:
+        return array
+    if array.shape != mask.shape:
+        raise ValueError("Array and mask must have the same shape.")
+    masked_array = array.copy()
+    masked_array[mask == 0] = 0
+    return masked_array
 
 def landslide_retrogression(dem: np.ndarray,
                             initial_release: np.ndarray,
@@ -235,10 +257,13 @@ def landslide_retrogression(dem: np.ndarray,
     animation = []
     animation.append(initial_release)
 
+    initial_release_buffered = apply_mask(initial_release + create_buffer(initial_release, min_iter), mask)
+
     with tqdm(total=0, desc="iterations", disable=not verbose) as pbar:
         while n_iter < max_iter:
 
-            buffered = create_buffer(release, 1)
+            buffered = apply_mask(create_buffer(release, 1), mask)
+
             i_buffered, j_buffered = np.where(buffered == 1)
             x_buffered, y_buffered = rasterio.transform.xy(dem_transform, i_buffered, j_buffered)
             z_buffered = np.array([dem[ii, jj] for ii, jj in zip(i_buffered, j_buffered)])
@@ -258,8 +283,7 @@ def landslide_retrogression(dem: np.ndarray,
             else:
                 release_after = release + buffered
 
-            if mask is not None:
-                release_after[mask == 0] = 0
+            release_after = apply_mask(release_after, mask)
 
             if np.all(release.astype(bool) == release_after.astype(bool)) and n_iter > min_iter:
                 break
@@ -271,7 +295,7 @@ def landslide_retrogression(dem: np.ndarray,
             n_iter += 1
             pbar.update(1)
 
-    if np.all(release == initial_release+create_buffer(initial_release, min_iter)):
+    if np.all(release == initial_release_buffered):
         if verbose:
             print(f"Warning: no propagation besides the minimum length of {min_length} m / {min_iter+1} iterations")
             print("returning the original release area")
