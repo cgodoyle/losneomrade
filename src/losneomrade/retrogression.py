@@ -92,6 +92,22 @@ def run_retrogression_with_initial_landslide(
         return_animation=False,
         
 ):
+    """
+    Run landslide retrogression with an initial landslide.
+
+    Args:
+        bounds (tuple): xmin, ymin, xmax, ymax
+        rel_shape (gpd.GeoDataFrame): release area as a geodataframe (any type of geometry)
+        point_depth (float): depth of the source points (/line/polygon)
+        clip_to_msml (bool): wheter to clip against MSML (sammenhengede forekomster).
+        ini_slope (float): initial slope of the landslide.
+        retro_slope (float): retrogressive slope of the landslide.
+        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
+        min_length (float): minimum length of the landslide (slope not checked within this length). Default is 75 m.
+        custom_raster (np.ndarray): custom raster to use for the calculation. Default is None.
+        return_animation (bool): wheter to return the animation of the retrogression. Default is False.
+
+    """
     if custom_raster is None:
         dem_data = utils.get_hoydedata(bounds, )
     else:
@@ -103,6 +119,7 @@ def run_retrogression_with_initial_landslide(
     if clip_to_msml:
         mask_gpd = utils.get_msml_mask((bounds[0], bounds[2], bounds[1], bounds[3]))
         mask_msml = utils.rasterize_shape(mask_gpd, dem_profile)
+
     else:
         mask_msml = None
 
@@ -111,6 +128,7 @@ def run_retrogression_with_initial_landslide(
     min_length_first = min_length * ini_slope
     min_length_second = min_length - min_length_first
 
+    
     release_first, animation_first = landslide_retrogression(
         dem_array, 
         rel, dem_profile["transform"], 
@@ -120,8 +138,9 @@ def run_retrogression_with_initial_landslide(
         min_length=min_length_first, 
         mask=mask_msml,
         verbose=False)
+
     
-    if np.all(release_first == rel):
+    if np.all(release_first == rel) or release_first.sum() == 0:
         akt = gpd.GeoDataFrame(columns=["geometry", "slope"], crs=25833)
         animation_second = []
 
