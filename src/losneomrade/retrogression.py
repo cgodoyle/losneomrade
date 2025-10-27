@@ -86,7 +86,7 @@ def run_retrogression_with_initial_landslide(
         clip_to_msml=False,
         custom_msml: gpd.GeoDataFrame=None,
         ini_slope: float = 1 / 4,
-        retro_slope: float = 1 / 15,
+        retro_slope: list = [1 / 15],
         min_height: float = 5,
         min_length: float = 75,
         custom_raster=None,
@@ -101,7 +101,7 @@ def run_retrogression_with_initial_landslide(
         rel_shape (gpd.GeoDataFrame): release area as a geodataframe (any type of geometry)
         point_depth (float): depth of the source points (/line/polygon)
         clip_to_msml (bool): wheter to clip against MSML (sammenhengede forekomster).
-        ini_slope (float): initial slope of the landslide.
+        ini_slope (list): list with slope of the landslide's release area to compute.
         retro_slope (float): retrogressive slope of the landslide.
         min_height (float): minimum height for checking the slope criterion. Default is 5 m.
         min_length (float): minimum length of the landslide (slope not checked within this length). Default is 75 m.
@@ -109,6 +109,9 @@ def run_retrogression_with_initial_landslide(
         return_animation (bool): wheter to return the animation of the retrogression. Default is False.
 
     """
+    if not isinstance(retro_slope, list):
+        retro_slope = [retro_slope]
+        
     if custom_raster is None:
         dem_data = utils.get_hoydedata(bounds, )
     else:
@@ -149,25 +152,33 @@ def run_retrogression_with_initial_landslide(
         animation_second = []
 
     else:
-        release_second, animation_second = landslide_retrogression(
-            dem=dem_array,
-            initial_release=release_first,
-            dem_transform=dem_profile["transform"],
-            min_slope=retro_slope,
-            min_height=0,
-            min_length=min_length_second,
-            max_length=2000,
-            initial_release_depth=0,
-            mask=mask_msml,
-            verbose=False
-        )
-        
 
         first_release = utils.polygonize_results(release_first, dem_profile, field="slope").to_crs(epsg=25833)
         first_release["slope"] = ini_slope
-        second_release = utils.polygonize_results(release_second, dem_profile, field="slope").to_crs(epsg=25833)
-        second_release["slope"] = retro_slope
-        akt = pd.concat([first_release, second_release], ignore_index=True)
+
+        release_list = [first_release]
+
+        for slope in retro_slope:
+
+            release_second, animation_second = landslide_retrogression(
+                dem=dem_array,
+                initial_release=release_first,
+                dem_transform=dem_profile["transform"],
+                min_slope=slope,
+                min_height=0,
+                min_length=min_length_second,
+                max_length=2000,
+                initial_release_depth=0,
+                mask=mask_msml,
+                verbose=False
+            )
+            
+
+            second_release = utils.polygonize_results(release_second, dem_profile, field="slope").to_crs(epsg=25833)
+            second_release["slope"] = slope
+            release_list.append(second_release)
+
+        akt = pd.concat(release_list, ignore_index=True)
 
 
     if return_animation:
