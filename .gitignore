@@ -24,6 +24,7 @@ coverage.xml
 
 # Local development settings
 .env
+.venv/
 venv/
 .env.local
 .env.*.local
