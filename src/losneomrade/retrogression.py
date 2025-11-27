@@ -935,7 +935,7 @@ def _process_group(args):
     (dem_crop, rel_crop, transform_crop, depth, min_slope, min_height, min_length, mask_crop, slope_chunk_size) = args
     
     # Run retrogression on the group
-    result, _ = landslide_retrogression(
+    result, _ = landslide_retrogression_optimized(
         dem_crop, rel_crop, transform_crop,
         initial_release_depth=depth,
         min_slope=min_slope,

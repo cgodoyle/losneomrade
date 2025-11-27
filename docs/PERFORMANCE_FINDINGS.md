@@ -54,20 +54,11 @@ This ensures that any components that *might* interact are processed together in
 #### The Buffer Fix
 A critical bug where the cropped DEM for parallel tasks was too small, cutting off long runouts, was also fixed. The buffer is now dynamically calculated based on `max_length`.
 
----
-
-## 3. Benchmarks
-
-### Accuracy (vs Serial Baseline)
-| Method | Area (ha) | Difference | Status |
-|--------|-----------|------------|--------|
-| Serial | 860.01 | - | Baseline |
-| Adaptive (Balanced) | 860.01 | 0.00% | ✅ Perfect |
-
-### Speed (streams_subset_50)
--   **Serial**: 175.04s
--   **Parallel**: 30.57s
--   **Speedup**: **5.7x**
+#### Speed Mode Trade-off
+When using `speed_priority='speed'`, you may observe slightly smaller total landslide areas compared to the Serial or Balanced modes. This is due to **aggressive cropping**:
+-   The "Speed" strategy uses a default `buffer_pixels=50` (approx. 250m at 5m resolution) to maximize performance.
+-   If a landslide attempts to propagate further than ~250m from its initial group boundary, it hits the edge of the cropped DEM and stops artificially.
+-   **Recommendation**: Use 'speed' only for initial scouting or when components are known to be small/isolated. Use 'balanced' or 'serial' for final reporting.
 
 ---
 
@@ -77,9 +68,12 @@ A critical bug where the cropped DEM for parallel tasks was too small, cutting o
 -   Added `compute_slope_chunked`: Memory-efficient slope calculation.
 
 ### `src/losneomrade/retrogression.py`
--   Updated `landslide_retrogression`: Implemented BFS optimization.
+### `src/losneomrade/retrogression.py`
+-   Renamed `landslide_retrogression` to `landslide_retrogression_original`: Preserved original iterative logic.
+-   Added `landslide_retrogression_optimized`: Implemented BFS optimization.
 -   Added `run_retrogression_parallel_grouped`: Core parallel logic with grouping.
 -   Added `run_retrogression_parallel_adaptive`: Wrapper to easily select speed/accuracy trade-offs.
+-   Added `_process_group` and `_process_component`: Helper functions for parallel execution.
 
 ---
 
@@ -92,3 +86,5 @@ retrogression.run_retrogression_parallel_adaptive(..., speed_priority='balanced'
 ```
 
 This provides the best balance of speed and guaranteed accuracy.
+
+
