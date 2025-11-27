@@ -336,7 +336,7 @@ def main():
         print("="*80)
         
         try:
-            fig, axes = plt.subplots(1, 2, figsize=(20, 9))
+            fig, axes = plt.subplots(1, 2, figsize=(16, 10))
             
             print("\nPlotting serial baseline...")
             plot_comparison(axes[0], CUSTOM_DEM, STREAM_FILE, baseline_output, 
@@ -364,6 +364,7 @@ def main():
                         fontsize=16, fontweight='bold')
             
             plt.tight_layout()
+            plt.subplots_adjust(wspace=0.05)
             
             # Save
             viz_output = os.path.join(args.output_dir, 
