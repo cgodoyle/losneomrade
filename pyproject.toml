@@ -11,7 +11,7 @@ authors = [
 
 
 dependencies = [ 
-                  "numpy<=2.0.1",
+                  "numpy>=2.0.0",
                   "pandas",
                   "matplotlib",
                   "scipy",
@@ -23,6 +23,7 @@ dependencies = [
                   "requests",
                   "urllib3",
                   "Pillow",
+                  "plotly",
 
 ]
 

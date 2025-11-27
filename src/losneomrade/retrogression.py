@@ -73,7 +73,7 @@ def run_retrogression(bounds: tuple,
 
     rel = utils.rasterize_shape(rel_shape, dem_profile)
 
-    release, anim = landslide_retrogression(
+    release, anim = landslide_retrogression_optimized(
         dem_array, rel, dem_profile["transform"], initial_release_depth=point_depth,
         min_slope=min_slope, min_height=min_height, min_length=min_length, mask=mask_msml,
         verbose=verbose, slope_chunk_size=slope_chunk_size)
@@ -145,7 +145,7 @@ def run_retrogression_with_initial_landslide(
     min_length_second = min_length - min_length_first
 
     
-    release_first, animation_first = landslide_retrogression(
+    release_first, animation_first = landslide_retrogression_optimized(
         dem_array,
         rel, dem_profile["transform"],
         initial_release_depth=point_depth,
@@ -170,7 +170,7 @@ def run_retrogression_with_initial_landslide(
 
         for slope in retro_slope:
 
-            release_second, animation_second = landslide_retrogression(
+            release_second, animation_second = landslide_retrogression_optimized(
                 dem=dem_array,
                 initial_release=release_first,
                 dem_transform=dem_profile["transform"],
@@ -217,7 +217,7 @@ def apply_mask(array: np.ndarray, mask: np.ndarray) -> np.ndarray:
     masked_array[mask == 0] = 0
     return masked_array
 
-def landslide_retrogression(dem: np.ndarray,
+def landslide_retrogression_optimized(dem: np.ndarray,
                             initial_release: np.ndarray,
                             dem_transform: rasterio.transform.Affine,
                             min_slope: float = 1 / 15,
@@ -409,6 +409,114 @@ def landslide_retrogression(dem: np.ndarray,
          # Or if min_iter=0 and no propagation happened.
          pass
 
+    return release, animation
+
+
+def landslide_retrogression_original(dem: np.ndarray,
+                            initial_release: np.ndarray,
+                            dem_transform: rasterio.transform.Affine,
+                            min_slope: float = 1 / 15,
+                            min_height: float = 5,
+                            min_length: float = 200,
+                            max_length: float = 2000,
+                            initial_release_depth: float = 0,
+                            mask: np.ndarray = None,
+                            verbose: bool = False):
+    """
+    Propagates a landslide from a release area in a DEM. Stop criteria is defined by the maximum slope, minimum and
+    maximum length of the landslide. The propagation is done iteratively, starting from the release area and moving
+    outwards. The propagation is done in 3D, i.e. the landslide can propagate in any direction.
+
+    Parameters:
+        dem (np.ndarray): DEM as a numpy array
+        initial_release (np.ndarray): initial release area as a boolean numpy array.
+                                      Must have the same shape and same transform as the DEM.
+        dem_transform (Affine): affine transformation of the DEM/release.
+        min_slope (float): minimum slope of the landslide. Default is 1/15 as in NVE's guidelines
+        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
+        min_length (float): minimum length of the landslide. Default is 200 m.
+        max_length (float): maximum length of the landslide. Default is 2000 m.
+        initial_release_depth (float): depth of the initial release area. Default is 0.
+        #TODO: change to depth in the raster (as pixel value) instead.
+        mask (np.ndarray): mask of the area outside analysis. Must have the same shape and same transform as the DEM.
+                            Default is None.
+        verbose (bool): wheter to print progress. Default is False.
+
+
+    Returns:
+        release (np.ndarray): propagated release area of the landslide as a boolean numpy array
+
+
+    """
+    if verbose:
+        print("runing landslide propagation...")
+    if abs(round(dem_transform[0], 2)) != abs(round(dem_transform[4], 2)):
+        if verbose:
+            print("Warning: DEM is not square")
+
+    res = abs(dem_transform[0])
+
+    min_iter = int(min_length // res)
+    max_iter = int(max_length // res)
+
+    # shut up RuntimeWarning
+    np.seterr(divide='ignore', invalid='ignore')
+
+    n_iter = 1
+
+    release = initial_release.copy()
+
+    i_rel, j_rel = np.where(initial_release == 1)
+    x_rel, y_rel = rasterio.transform.xy(dem_transform, i_rel, j_rel)
+    z_rel = np.array([dem[ii, jj] - initial_release_depth for ii, jj in zip(i_rel, j_rel)])
+    release_coords = np.c_[x_rel, y_rel, z_rel]
+
+    animation = []
+    animation.append(initial_release)
+
+    initial_release_buffered = apply_mask(initial_release + create_buffer(initial_release, min_iter), mask)
+
+    with tqdm(total=0, desc="iterations", disable=not verbose) as pbar:
+        while n_iter < max_iter:
+
+            buffered = apply_mask(create_buffer(release, 1), mask)
+
+            i_buffered, j_buffered = np.where(buffered == 1)
+            x_buffered, y_buffered = rasterio.transform.xy(dem_transform, i_buffered, j_buffered)
+            z_buffered = np.array([dem[ii, jj] for ii, jj in zip(i_buffered, j_buffered)])
+            buffered_coords = np.c_[x_buffered, y_buffered, z_buffered]
+
+            # h_min = 0 if n_iter <= min_iter else min_height
+            slopes = utils.compute_slope(buffered_coords, release_coords, h_min=min_height)
+
+            if n_iter > min_iter:
+                neighbours_filtered = [(i_buffered[ii], j_buffered[ii]) for ii in
+                                       list(np.where(np.array(slopes) > min_slope)[0])]
+
+                release_after = release.copy()
+
+                for ii in neighbours_filtered:
+                    release_after[ii] = 1
+            else:
+                release_after = release + buffered
+
+            release_after = apply_mask(release_after, mask)
+
+            if np.all(release.astype(bool) == release_after.astype(bool)) and n_iter > min_iter:
+                break
+
+            release = release_after.copy()
+
+            animation.append(release_after)
+
+            n_iter += 1
+            pbar.update(1)
+
+    if np.all(release == initial_release_buffered):
+        if verbose:
+            print(f"Warning: no propagation besides the minimum length of {min_length} m / {min_iter+1} iterations")
+            print("returning the original release area")
+        release = initial_release
     return release, animation
 
 
@@ -615,7 +723,7 @@ def _process_component(args):
     (dem_crop, rel_crop, transform_crop, depth, min_slope, min_height, min_length, mask_crop, slope_chunk_size) = args
     
     # Run retrogression on the crop
-    result, _ = landslide_retrogression(
+    result, _ = landslide_retrogression_optimized(
         dem_crop, rel_crop, transform_crop,
         initial_release_depth=depth,
         min_slope=min_slope,
