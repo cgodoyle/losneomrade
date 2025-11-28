@@ -23,8 +23,6 @@ The original `utils.compute_slope` function created a full distance matrix betwe
 -   **Mechanism**: Instead of one massive matrix, smaller matrices (e.g., 1000 points at a time) are computed, accumulating the maximum slope.
 -   **Result**: Memory usage is now constant (controlled by `chunk_size`) regardless of the total number of points.
 
-![Memory Explosion vs Chunking](images/memory_explosion_chunking.png)
-
 ---
 
 ## 2. Retrogression Analysis Optimization
