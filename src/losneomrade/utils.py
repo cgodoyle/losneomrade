@@ -148,6 +148,43 @@ def compute_slope(coords: np.ndarray, points: np.ndarray, h_min: float = 5, noda
         return max_slope
 
 
+def compute_slope_chunked(coords: np.ndarray, points: np.ndarray, h_min: float = 5, nodata: int = -9999, chunk_size: int = 1000) -> np.ndarray:
+    """
+    Compute the slopes of the given dem with respect to the (source) points using chunked processing
+    to avoid memory explosion.
+    Args:
+        coords: dem window coordinates
+        points: source point coordinates
+        h_min: minimum height difference where slopes are calculated
+        nodata: value given to pixels with no data
+        chunk_size: number of points to process in each batch
+
+    Returns:
+        max_slope: array with slopes (same shape as input dem)
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        xy_1 = coords[:, :2]
+        z1 = coords[:, -1]
+        
+        max_slope = np.full(len(coords), nodata, dtype=np.float64)
+        
+        for i in range(0, len(points), chunk_size):
+            chunk_points = points[i:i+chunk_size]
+            xy_2 = chunk_points[:, :2]
+            z2 = chunk_points[:, -1]
+            
+            distance_mtx = distance_matrix(xy_1, xy_2)
+            height_mtx = z1[:, np.newaxis] - z2
+            hl_ratio = height_mtx / distance_mtx
+            hl_ratio[height_mtx < h_min] = nodata
+            
+            chunk_max = np.max(hl_ratio, axis=1)
+            max_slope = np.maximum(max_slope, chunk_max)
+            
+        return max_slope
+
+
 def set_z_from_raster(points_xy: np.ndarray, window_data: dict) -> np.ndarray:
     """
     Set elevation value to the given x,y points

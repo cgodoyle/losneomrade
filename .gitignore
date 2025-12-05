@@ -24,6 +24,7 @@ coverage.xml
 
 # Local development settings
 .env
+.venv/
 venv/
 .env.local
 .env.*.local
@@ -39,3 +40,7 @@ venv/
 # Test notebooks
 notebooks_test/
 *no_github*.*
+
+# Milestone docs
+docs/
+output/comparison_serial_optimized_vs_parallel_adaptive_balanced/

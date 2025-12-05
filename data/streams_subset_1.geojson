@@ -1,0 +1,8 @@
+{
+"type": "FeatureCollection",
+"name": "streams_subset_1",
+"crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::25833" } },
+"features": [
+{ "type": "Feature", "properties": { "fid": 990, "objtype": "ElvBekk", "lokalid": "c78f30c3-16ee-44f7-953a-8aca4461062e", "medium": "T", "vannbredde": 1.0, "vannsperretype": null, "arealRegineEnhet_km2": null, "elveordenStrahler": null, "catch_area": 2.249160575912954, "water_depth": 0.81387875803095833, "gradient": 0.0, "aggressive": 0.0, "aggressiveness": 0.0, "id": 990 }, "geometry": { "type": "MultiLineString", "coordinates": [ [ [ 258956.583491459634388, 7034537.224670800380409 ], [ 258956.066800000146031, 7034535.136399999260902 ], [ 258955.255499999970198, 7034533.132100000977516 ], [ 258950.737900000065565, 7034523.877500001341105 ], [ 258950.5921, 7034521.147399999201298 ], [ 258954.162299999967217, 7034517.425000000745058 ], [ 258965.376500000245869, 7034507.125199999660254 ], [ 258967.361999999731779, 7034505.792899999767542 ], [ 258968.825000000186265, 7034505.424400001764297 ] ] ] } }
+]
+}

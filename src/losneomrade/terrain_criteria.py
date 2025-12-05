@@ -133,7 +133,7 @@ def terrain_criteria(bounds: tuple,
     windows_dems = window_data["windows_dem_arrays"]
     windows_transforms = window_data["windows_transforms"]
     raster_profile = window_data["profile"]
-    nan_value = raster_profile["nodata"]
+    nan_value = raster_profile["nodata"] if raster_profile["nodata"] is not None else -9999
 
     points = utils.set_z_from_raster(points, window_data)
     points[:, 2] = points[:, 2] - point_depth
