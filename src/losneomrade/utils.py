@@ -2,20 +2,19 @@ import os
 import tempfile
 import time
 import warnings
-import requests
-from urllib.request import urlopen, HTTPError
+from typing import List, Union
+from urllib.request import HTTPError, urlopen
 
-import rasterio
 import geopandas as gpd
 import numpy as np
+import pandas as pd
+import rasterio
+import requests
 from rasterio import MemoryFile
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
-from shapely.geometry.base import BaseGeometry
 from shapely.geometry import box
-from typing import Union, List
-import pandas as pd
-
+from shapely.geometry.base import BaseGeometry
 
 warnings.simplefilter(action='ignore', category=UserWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -144,6 +143,42 @@ def compute_slope(coords: np.ndarray, points: np.ndarray, h_min: float = 5, noda
         hl_ratio = height_mtx / distance_mtx
         hl_ratio[height_mtx < h_min] = nodata
         max_slope = np.max(hl_ratio, axis=1)
+
+        return max_slope
+
+
+def compute_slope_chunked(coords: np.ndarray, points: np.ndarray, h_min: float = 5, nodata: int = -9999, chunk_size: int = 1000) -> np.ndarray:
+    """
+    Compute the slopes of the given dem with respect to the (source) points using chunked processing
+    to avoid memory explosion.
+    Args:
+        coords: dem window coordinates
+        points: source point coordinates
+        h_min: minimum height difference where slopes are calculated
+        nodata: value given to pixels with no data
+        chunk_size: number of points to process in each batch
+    Returns:
+        max_slope: array with slopes (same shape as input dem)
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        xy_1 = coords[:, :2]
+        z1 = coords[:, -1]
+
+        max_slope = np.full(len(coords), nodata, dtype=np.float64)
+
+        for i in range(0, len(points), chunk_size):
+            chunk_points = points[i:i+chunk_size]
+            xy_2 = chunk_points[:, :2]
+            z2 = chunk_points[:, -1]
+
+            distance_mtx = distance_matrix(xy_1, xy_2)
+            height_mtx = z1[:, np.newaxis] - z2
+            hl_ratio = height_mtx / distance_mtx
+            hl_ratio[height_mtx < h_min] = nodata
+
+            chunk_max = np.max(hl_ratio, axis=1)
+            max_slope = np.maximum(max_slope, chunk_max)
 
         return max_slope
 

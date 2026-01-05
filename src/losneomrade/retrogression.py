@@ -79,6 +79,198 @@ def run_retrogression(bounds: tuple,
     return akt
 
 
+def landslide_retrogression(dem: np.ndarray,
+                            initial_release: np.ndarray,
+                            dem_transform: rasterio.transform.Affine,
+                            min_slope: float = 1 / 15,
+                            min_height: float = 5,
+                            min_length: float = 200,
+                            max_length: float = 2000,
+                            initial_release_depth: float = 0,
+                            mask: np.ndarray = None,
+                            verbose: bool = False,
+                            slope_chunk_size: int = 1000):
+    """
+    Propagates a landslide from a release area in a DEM. Stop criteria is defined by the maximum slope, minimum and
+    maximum length of the landslide. The propagation is done iteratively, starting from the release area and moving
+    outwards. The propagation is done in 3D, i.e. the landslide can propagate in any direction.
+    **Optimization Changes (BFS):**
+    This function has been optimized using a Breadth-First Search (BFS) approach for the conditional expansion phase.
+    
+    1.  **Phase 1 (Unconditional):** Expands the release area unconditionally up to `min_length`.
+    2.  **Phase 2 (Conditional BFS):**
+        -   Instead of checking every pixel in the release area at every iteration (which is O(N^2) or worse),
+            we maintain a "front" of candidate pixels (neighbors of the current release).
+        -   We only check slope criteria for these candidate pixels against relevant source points.
+        -   Pixels that fail the criteria are marked as "checked" and not re-evaluated.
+        -   Pixels that pass are added to the release, and their neighbors become new candidates.
+        -   This reduces redundant calculations significantly.
+    Parameters:
+        dem (np.ndarray): DEM as a numpy array
+        initial_release (np.ndarray): initial release area as a boolean numpy array.
+                                      Must have the same shape and same transform as the DEM.
+        dem_transform (Affine): affine transformation of the DEM/release.
+        min_slope (float): minimum slope of the landslide. Default is 1/15 as in NVE's guidelines
+        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
+        min_length (float): minimum length of the landslide. Default is 200 m.
+        max_length (float): maximum length of the landslide. Default is 2000 m.
+        initial_release_depth (float): depth of the initial release area. Default is 0.
+        #TODO: change to depth in the raster (as pixel value) instead.
+        mask (np.ndarray): mask of the area outside analysis. Must have the same shape and same transform as the DEM.
+                            Default is None.
+        verbose (bool): wheter to print progress. Default is False.
+        slope_chunk_size (int): chunk size for slope calculation (default 1000). Uses
+                                utils.compute_slope_chunked to keep memory and runtime in check while
+                                preserving baseline results.
+    Returns:
+        release (np.ndarray): propagated release area of the landslide as a boolean numpy array
+    """
+    if verbose:
+        print("Running landslide propagation (Optimized BFS)...")
+    if abs(round(dem_transform[0], 2)) != abs(round(dem_transform[4], 2)):
+        if verbose:
+            print("Warning: DEM is not square")
+
+    res = abs(dem_transform[0])
+
+    min_iter = int(min_length // res)
+    max_iter = int(max_length // res)
+
+    # shut up RuntimeWarning
+    np.seterr(divide='ignore', invalid='ignore')
+
+    initial_release = initial_release.astype(bool)
+
+    # 1. Setup Source Points (Constant)
+    i_rel, j_rel = np.where(initial_release == 1)
+    x_rel, y_rel = rasterio.transform.xy(dem_transform, i_rel, j_rel)
+    z_rel = np.array([dem[ii, jj] - initial_release_depth for ii, jj in zip(i_rel, j_rel)])
+    source_coords = np.c_[x_rel, y_rel, z_rel]
+
+    animation = [initial_release]
+
+    # 2. Phase 1: Unconditional Expansion (min_length)
+    current_release = initial_release.copy()
+
+    # We iterate to generate animation frames and handle masking properly step-by-step
+    # (though we could optimize this if animation is not needed, but let's keep it safe)
+    for i in range(min_iter):
+        # Dilate by 1 to get the rim
+        buffered = create_buffer(current_release, 1) 
+        # Apply mask
+        buffered = apply_mask(buffered, mask)
+
+        if not np.any(buffered):
+            break
+
+        # Add to release
+        current_release = current_release | buffered
+        animation.append(current_release.copy())
+
+    release = current_release
+
+    # 3. Phase 2: Conditional Expansion (BFS)
+    # Checked mask: pixels we have already processed (either accepted or rejected)
+    # Initially, everything in the current release is "checked" (accepted).
+    checked = release.copy()
+
+    # Current candidates: neighbors of the current release that are NOT checked
+    # create_buffer returns the rim.
+    candidates_mask = create_buffer(release, 1)
+    candidates_mask = apply_mask(candidates_mask, mask)
+    candidates_mask = candidates_mask & (~checked)
+
+    n_iter = min_iter
+
+    with tqdm(total=max_iter, initial=n_iter, desc="iterations", disable=not verbose) as pbar:
+        while n_iter < max_iter:
+            if not np.any(candidates_mask):
+                break
+
+            # Extract candidate coordinates
+            i_cand, j_cand = np.where(candidates_mask == 1)
+            x_cand, y_cand = rasterio.transform.xy(dem_transform, i_cand, j_cand)
+            z_cand = np.array([dem[ii, jj] for ii, jj in zip(i_cand, j_cand)])
+            cand_coords = np.c_[x_cand, y_cand, z_cand]
+
+            # Optimization: Filter source points to relevant area
+            # We only care about source points that could possibly satisfy the slope condition.
+            # Max relevant distance is bounded by max_length (since we stop there) 
+            # or by the physical limit (delta_z / min_slope).
+            # We use a generous buffer to be safe.
+            search_buffer = max(max_length, 2000) 
+
+            c_xmin, c_ymin = np.min(cand_coords[:, :2], axis=0)
+            c_xmax, c_ymax = np.max(cand_coords[:, :2], axis=0)
+
+            s_xmin, s_ymin = c_xmin - search_buffer, c_ymin - search_buffer
+            s_xmax, s_ymax = c_xmax + search_buffer, c_ymax + search_buffer
+
+            # Filter source points (vectorized)
+            relevant_mask = (
+                (source_coords[:, 0] >= s_xmin) & 
+                (source_coords[:, 0] <= s_xmax) & 
+                (source_coords[:, 1] >= s_ymin) & 
+                (source_coords[:, 1] <= s_ymax)
+            )
+
+            relevant_sources = source_coords[relevant_mask]
+
+            if len(relevant_sources) == 0:
+                slopes = np.zeros(len(cand_coords))
+            else:
+                # Compute slopes against filtered source
+                if slope_chunk_size is not None:
+                    slopes = utils.compute_slope_chunked(
+                        cand_coords, relevant_sources, h_min=min_height, chunk_size=slope_chunk_size
+                    )
+                else:
+                    slopes = utils.compute_slope(cand_coords, relevant_sources, h_min=min_height)
+
+            # Identify successful candidates
+            success_mask_local = slopes > min_slope
+
+            # If no success, this front stops.
+            if not np.any(success_mask_local):
+                # Mark all as checked (rejected)
+                checked[i_cand, j_cand] = 1
+                break
+
+            # Update release with successful candidates
+            # We need to map back to global grid
+            i_success = i_cand[success_mask_local]
+            j_success = j_cand[success_mask_local]
+
+            new_release_pixels = np.zeros_like(release, dtype=bool)
+            new_release_pixels[i_success, j_success] = 1
+
+            release = release | new_release_pixels
+
+            # Mark ALL current candidates as checked (both success and fail)
+            checked[i_cand, j_cand] = 1
+
+            animation.append(release.copy())
+
+            # Generate NEXT candidates
+            # Only neighbors of the NEWLY ADDED pixels need to be checked.
+            new_candidates = create_buffer(new_release_pixels, 1)
+            new_candidates = apply_mask(new_candidates, mask)
+
+            # Filter out already checked
+            candidates_mask = new_candidates & (~checked)
+
+            n_iter += 1
+            pbar.update(1)
+
+    if np.all(release == initial_release) and min_iter > 0:
+         # This handles the case where min_iter > 0 but masking prevented any expansion
+         # Or if min_iter=0 and no propagation happened.
+         pass
+
+    return release, animation
+
+
+
 def run_retrogression_with_initial_landslide(
         bounds: tuple,
         rel_shape: gpd.GeoDataFrame,
@@ -206,7 +398,8 @@ def apply_mask(array: np.ndarray, mask: np.ndarray) -> np.ndarray:
     masked_array[mask == 0] = 0
     return masked_array
 
-def landslide_retrogression(dem: np.ndarray,
+
+def landslide_retrogression_legacy(dem: np.ndarray,
                             initial_release: np.ndarray,
                             dem_transform: rasterio.transform.Affine,
                             min_slope: float = 1 / 15,
@@ -327,7 +520,8 @@ def create_buffer(image: np.ndarray, buffer_size: int = 1):
 
     """
     dilated_image = binary_dilation(image, iterations=buffer_size)
-    buffer = ((dilated_image - image) > 0).astype(bool)
+    # buffer = ((dilated_image - image) > 0).astype(bool)
+    buffer = dilated_image & (~image.astype(bool))
 
     return buffer
 
