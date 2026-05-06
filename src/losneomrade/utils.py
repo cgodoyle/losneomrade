@@ -1,106 +1,28 @@
 import logging
 import os
 import tempfile
-import time
 import warnings
-from urllib.request import HTTPError, urlopen
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
 import rasterio
 import requests
-from rasterio import MemoryFile
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
 from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPoint, Point, box
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, split
 
+from .config import settings
+from .hoydedata import get_hoydedata  # noqa: F401
+
 warnings.simplefilter(action="ignore", category=UserWarning)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 logger = logging.getLogger(__name__)
 
-HOYDEDATA_LAYER = "NHM_DTM_25833"
-
-
-def get_hoydedata(
-    bounds: tuple, layer: str = HOYDEDATA_LAYER, res: int = 5, nodata: int = -9999, max_retries=5
-) -> dict:
-    """
-    Function for downloading DEM from www.høydedata.no.
-
-    Args:
-        bounds (tuple): Bounding box of the DEM to be downloaden in the form of xmin, xmax, ymin, ymax
-        layer (str, optional): Which Høydedata API layer. "dtm1_32_wcs", "dtm1_33_wcs", "dtm1_32_wcs" or "dtm1_33_wcs".
-                               Defaults to "dtm1_33_wcs".
-        res (int, optional): Resolution of the output DEM in meters, if it is different from the layer used it
-                            will be resampled. Defaults to 5.
-        nodata (int, optional): Value for nodata pixels. Defaults to -9999.
-
-    Returns:
-        (tuple): (dem_array, transform): array with DEM values and the transform used to convert array's rows
-                                         and cols to geographic coordinates.
-    """
-
-    # Check input layer
-    if layer not in ["dtm1_32_wcs", "dtm1_33_wcs", "dtm10_32_wcs", "dtm10_33_wcs", "NHM_DTM_25833", "NHM_DTM_25832"]:
-        logger.error(f"Invalid API layer: {layer}")
-        return dict()
-
-    # Set up request to høydedata
-    xmin, xmax, ymin, ymax = bounds
-    width = int((xmax - xmin) / res)
-    height = int((ymax - ymin) / res)
-
-    request_url = (
-        f"https://hoydedata.no/arcgis/rest/services/{layer}/ImageServer/exportImage?"
-        f"bbox={xmin},{ymin},{xmax},{ymax}&size={width},{height}&bboxSR=&size=&imageSR=&time=&format=tiff&"
-        f"pixelType=F32&noData={nodata}&noDataInterpretation=esriNoDataMatchAny"
-        f"&interpolation=+RSP_BilinearInterpolation&compression=&compressionQuality=&"
-        f"bandIds=&mosaicRule=&renderingRule=&f=image"
-    )
-
-    # Open the request output with rasterio and save elevation array and transform
-    attempts = 0
-    wait_time = 1
-    while attempts < max_retries:
-        try:
-            tif_bytes = urlopen(request_url).read()
-            break
-        except Exception:
-            attempts += 1
-            time.sleep(wait_time)
-    else:
-        logger.error(f"Failed to fetch DEM after {max_retries} attempts. URL: {request_url}")
-        raise Exception("Error (Probably area requested is too big/small or høydedata is down)")
-
-    windows_dems = []
-    windows_transforms = []
-
-    try:
-        with MemoryFile(tif_bytes) as memfile:
-            with memfile.open() as dataset:
-                dataset_profile = dataset.profile
-                windows = [window for ij, window in dataset.block_windows()]
-                full_array = dataset.read(1)
-                for window in windows:
-                    windows_dems.append(dataset.read(1, window=window))
-
-                    windows_transforms.append(rasterio.windows.transform(window, dataset.transform))
-
-    except Exception:
-        logger.error(f"Error reading DEM response. URL: {request_url}")
-        raise
-
-    return {
-        "windows_dem_arrays": windows_dems,
-        "windows_transforms": windows_transforms,
-        "windows": windows,
-        "profile": dataset_profile,
-        "full_array": full_array,
-    }
+HOYDEDATA_LAYER = settings.hoydedata.layer
 
 
 def dem_coordinates(dem_array: np.ndarray, dem_transform: rasterio.transform.Affine) -> np.ndarray:
@@ -216,71 +138,6 @@ def set_z_from_raster(points_xy: np.ndarray, window_data: dict) -> np.ndarray:
 
     return np.c_[points_filt[:, :2], z][~filter_nan]
 
-
-def profile(line, dtm_layer=HOYDEDATA_LAYER, nodata=-9999, fra_crs=4326, to_crs=25833):
-    """
-    Compute a terrain profile from a given line
-    Args:
-        line: array with xy coordinates
-        dtm_layer: høydedata api layer
-        nodata: value to be used as nodata
-        fra_crs: input crs
-        to_crs: output crs
-
-    Returns: numpy array with X, Y, Z, M values
-
-    """
-    retries = 10
-    wait = 5
-
-    attempt = 0
-
-    gdf = gpd.GeoDataFrame(index=[0], crs=f"epsg:{int(fra_crs)}", geometry=[line]).to_crs(epsg=to_crs)
-    linea2 = gdf.iloc[0].geometry
-    n_points = int(max(linea2.length / 5, 5))
-    new_points = [linea2.interpolate(i / float(n_points - 1), normalized=True) for i in range(n_points)]
-    points_coords = np.array([[pp.coords.xy[0][0], pp.coords.xy[1][0]] for pp in new_points])
-
-    xmin, ymin = np.min(points_coords, axis=0) - 10
-    xmax, ymax = np.max(points_coords, axis=0) + 10
-    width = int((xmax - xmin) / 5)
-    height = int((ymax - ymin) / 5)
-
-    request_url = (
-        f"https://hoydedata.no/arcgis/rest/services/{dtm_layer}/ImageServer/exportImage?"
-        f"bbox={xmin},{ymin},{xmax},{ymax}&size={width},"
-        f"{height}&bboxSR=&size=&imageSR=&time=&format=tiff&pixelType=F32&"
-        f"noData={nodata}&noDataInterpretation=esriNoDataMatchAny"
-        f"&interpolation=+RSP_BilinearInterpolation&compression=&"
-        f"compressionQuality=&bandIds=&mosaicRule=&renderingRule=&f=image"
-    )
-    while attempt < retries:
-        try:
-            tif_bytes = urlopen(request_url).read()
-            break
-        except HTTPError:
-            attempt += 1
-            logger.debug(f"Attempt {attempt} failed, retrying...")
-            time.sleep(wait)
-    if attempt == retries:
-        raise Exception("HTTPError")
-    z_dem = []
-
-    try:
-        with MemoryFile(tif_bytes) as memfile:
-            with memfile.open() as dataset:
-                dem_array = dataset.read(1)
-                for pp in points_coords:
-                    ind = dataset.index(pp[0], pp[1])
-                    z_dem.append(dem_array[ind[0], ind[1]])
-
-    except rasterio.errors.RasterioIOError:
-        logger.error("Failed to read DEM raster for profile extraction")
-
-    cum_dist = np.cumsum(np.sqrt(np.sum((np.r_[[[0, 0]], np.diff(points_coords, axis=0)[:, :2]]) ** 2, axis=1)))
-
-    points = np.c_[points_coords, z_dem, cum_dist]
-    return points
 
 
 def generate_plotly_profile(prof, max_depth=None, kp_depth=0, limit=15):
