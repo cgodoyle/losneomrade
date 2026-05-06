@@ -41,8 +41,8 @@ def fake_slope_1_15():
 
 @pytest.fixture
 def alna_bounds():
-    """Bounds for Alna test area (xmin, xmax, ymin, ymax)."""
-    return 268463.9, 270007.6, 6651396.2, 6652564.4
+    """Bounds for Alna test area (xmin, ymin, xmax, ymax)."""
+    return 268463.9, 6651396.2, 270007.6, 6652564.4
 
 
 @pytest.fixture

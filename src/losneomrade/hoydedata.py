@@ -31,7 +31,7 @@ def get_hoydedata(
     """Download DEM from www.høydedata.no.
 
     Args:
-        bounds: Bounding box as (xmin, xmax, ymin, ymax).
+        bounds: Bounding box as (xmin, ymin, xmax, ymax).
         layer: Høydedata API layer name. Defaults to config value.
         res: Resolution of the output DEM in meters. Defaults to config value.
         nodata: Value for nodata pixels. Defaults to config value.
@@ -55,7 +55,7 @@ def get_hoydedata(
         logger.error(f"Invalid API layer: {layer}")
         return {}
 
-    xmin, xmax, ymin, ymax = bounds
+    xmin, ymin, xmax, ymax = bounds
     width = int((xmax - xmin) / res)
     height = int((ymax - ymin) / res)
 

@@ -175,7 +175,7 @@ class TestHoydedataNetwork:
 
     def test_get_hoydedata_returns_expected_structure(self):
         """get_hoydedata returns dict with expected keys."""
-        bounds = (268463.9, 270007.6, 6651396.2, 6652564.4)
+        bounds = (268463.9, 6651396.2, 270007.6, 6652564.4)
         result = get_hoydedata(bounds)
 
         assert isinstance(result, dict)
@@ -188,7 +188,7 @@ class TestHoydedataNetwork:
 
     def test_get_hoydedata_invalid_layer(self):
         """get_hoydedata returns empty dict for invalid layer."""
-        bounds = (268463.9, 270007.6, 6651396.2, 6652564.4)
+        bounds = (268463.9, 6651396.2, 270007.6, 6652564.4)
         result = get_hoydedata(bounds, layer="invalid_layer")
         assert result == {}
 

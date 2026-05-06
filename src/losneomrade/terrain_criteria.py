@@ -29,8 +29,8 @@ def run_terrain_criteria(
     """Run terrain criteria calculations.
 
     Args:
-        bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
-        source: GeoDataFrame with source points (LineStrings or Points),
+        bounds: Bounding box as (xmin, ymin, xmax, ymax). None if custom_raster is used.
+        source: GeoDataFrame with source points(LineStrings or Points),
             or a numpy array with source point coordinates.
         source_depth: Depth of the source points in meters.
         mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
@@ -110,7 +110,7 @@ def terrain_criteria(
     """Run terrain criteria calculation on a DEM.
 
     Args:
-        bounds: Bounding box as (xmin, xmax, ymin, ymax).
+        bounds: Bounding box as (xmin, ymin, xmax, ymax).
         points: Array with the source points (x, y, z).
         out_filename: Path to save results (without extension).
         point_depth: Depth of the source points in meters.

@@ -38,7 +38,7 @@ def run_retrogression(
     """Run landslide retrogression from a release area.
 
     Args:
-        bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
+        bounds: Bounding box as (xmin, ymin, xmax, ymax). None if custom_raster is used.
         rel_shape: Release area as a GeoDataFrame (any geometry type).
         point_depth: Depth of the source points/line/polygon in meters.
         mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
@@ -290,7 +290,7 @@ def run_retrogression_with_initial_landslide(
     continues with retro_slope (gentler, retrogressive phase).
 
     Args:
-        bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
+        bounds: Bounding box as (xmin, ymin, xmax, ymax). None if custom_raster is used.
         rel_shape: Release area as a list of shapely geometries.
         point_depth: Depth of the source points/line/polygon in meters.
         mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
