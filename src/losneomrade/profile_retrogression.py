@@ -115,7 +115,7 @@ def retrogression_distance(
         if debug:
             logger.debug(
                 "Warning: No zero crossing found and all depths are positive after "
-                f"{ignore_first_meters}m. Returning max distance {max(distance)}."
+                f"{ignore_first_meters}m. Returning max distance {max(distance)}.",
             )
         return max(distance)
 
@@ -123,7 +123,7 @@ def retrogression_distance(
         if debug:
             logger.debug(
                 "Warning: No zero crossing found and all depths are negative after "
-                f"{ignore_first_meters}m. Returning ignore_first_meters parameter."
+                f"{ignore_first_meters}m. Returning ignore_first_meters parameter.",
             )
         return ignore_first_meters
 
@@ -132,7 +132,7 @@ def retrogression_distance(
         if debug:
             logger.debug(
                 "Warning: No zero crossing found and NaN values present after "
-                f"{ignore_first_meters}m. Returning {distance[index_nan]}."
+                f"{ignore_first_meters}m. Returning {distance[index_nan]}.",
             )
         return distance[index_nan]
 
@@ -275,7 +275,7 @@ def retrogression_from_profiles(
     except Exception as exc:
         logger.exception(
             f"Error creating profiles for line length={line.length}, spacing_m={spacing_m}, "
-            f"profile_length_m={profile_length_m}, side={side}"
+            f"profile_length_m={profile_length_m}, side={side}",
         )
         logger.debug(f"Profile creation error: {exc}")
         return gpd.GeoDataFrame(geometry=[], crs=25833), None
@@ -702,7 +702,7 @@ def plot_release_from_profiles(
             retro_distance_list,
             slope_line_plot_list,
             max_heights_list,
-        )
+        ),
     ):
         row = index // cols
         col = index % cols
@@ -798,7 +798,10 @@ def plot_release_from_profiles(
     plt.tight_layout()
 
     ax = gpd.GeoDataFrame(geometry=points_coords).plot(
-        color="red", markersize=50, alpha=0.7, label="Retrogression Points"
+        color="red",
+        markersize=50,
+        alpha=0.7,
+        label="Retrogression Points",
     )
     return_gdf.plot(ax=ax, color="blue", alpha=0.3, edgecolor="black", label="Release Envelope")
     profile_gdf = gpd.clip(gpd.GeoDataFrame(geometry=profiles), return_gdf.buffer(20))

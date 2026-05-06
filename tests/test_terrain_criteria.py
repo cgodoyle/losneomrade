@@ -78,7 +78,7 @@ class TestTerrainCriteriaOffline:
                 points=points,
                 point_depth=0.5,
                 out_filename=f"{tempdir}/tc",
-                    h_min=0,
+                h_min=0,
                 custom_raster=fake_slope_1_5["path"],
             )
 
@@ -96,7 +96,7 @@ class TestTerrainCriteriaOffline:
                 points=points,
                 point_depth=0.5,
                 out_filename=f"{tempdir}/tc",
-                    h_min=0,
+                h_min=0,
                 reclassify_results=False,
                 custom_raster=fake_slope_1_5["path"],
             )

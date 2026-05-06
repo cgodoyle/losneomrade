@@ -11,6 +11,7 @@ from urllib.request import HTTPError, urlopen
 import geopandas as gpd
 import numpy as np
 import rasterio
+import rasterio.windows
 from rasterio import MemoryFile
 from shapely.geometry.base import BaseGeometry
 

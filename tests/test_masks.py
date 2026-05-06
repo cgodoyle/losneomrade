@@ -23,7 +23,7 @@ class TestMSMLMask:
         assert not result.empty
         area = result.area.sum()
         # Romerike should have substantial MSML area (>500 km²)
-        assert area > 500_000_000, f"Expected >500 km², got {area/1e6:.1f} km²"
+        assert area > 500_000_000, f"Expected >500 km², got {area / 1e6:.1f} km²"
 
     def test_get_msml_empty_area(self):
         """Ocean area with no MSML polygons returns empty GeoDataFrame."""

@@ -4,7 +4,6 @@ Offline tests use fake slopes to verify the retrogression pipeline
 produces correct results without hitting external APIs.
 """
 
-
 import geopandas as gpd
 import numpy as np
 import pytest

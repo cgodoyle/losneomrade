@@ -64,3 +64,6 @@ testpaths = ["tests"]
 markers = [
     "slow: tests that hit external APIs (deselect with '-m \"not slow\"')",
 ]
+
+[tool.ty.environment]
+python = "c:\\python_envs\\gis_v2\\python.exe"

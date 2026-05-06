@@ -4,7 +4,6 @@ Tests the functions most likely to break from code changes:
 slope computation, rasterize/polygonize, config, and fake slope generation.
 """
 
-
 import geopandas as gpd
 import numpy as np
 import pytest
@@ -79,11 +78,13 @@ class TestSlopeComputation:
     def test_compute_slope_chunked_matches_regular(self):
         """compute_slope_chunked produces same results as compute_slope."""
         np.random.seed(42)
-        coords = np.column_stack([
-            np.random.uniform(0, 100, 50),
-            np.random.uniform(0, 100, 50),
-            np.random.uniform(50, 150, 50),
-        ])
+        coords = np.column_stack(
+            [
+                np.random.uniform(0, 100, 50),
+                np.random.uniform(0, 100, 50),
+                np.random.uniform(50, 150, 50),
+            ]
+        )
         points = np.array([[50, 50, 40], [30, 30, 35]], dtype=np.float64)
 
         regular = utils.compute_slope(coords, points, h_min=0)

@@ -6,6 +6,7 @@ import warnings
 import geopandas as gpd
 import numpy as np
 import rasterio
+import rasterio.windows
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
 from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPoint, Point
@@ -71,7 +72,11 @@ def compute_slope(coords: np.ndarray, points: np.ndarray, h_min: float = 5, noda
 
 
 def compute_slope_chunked(
-    coords: np.ndarray, points: np.ndarray, h_min: float = 5, nodata: int = -9999, chunk_size: int = 1000
+    coords: np.ndarray,
+    points: np.ndarray,
+    h_min: float = 5,
+    nodata: int = -9999,
+    chunk_size: int = 1000,
 ) -> np.ndarray:
     """Compute slopes for DEM coordinates relative to source points in chunks.
 
@@ -139,7 +144,10 @@ def set_z_from_raster(points_xy: np.ndarray, window_data: dict) -> np.ndarray:
 
 
 def generate_plotly_profile(
-    prof: np.ndarray, max_depth: float | None = None, kp_depth: float = 0, limit: float = 15
+    prof: np.ndarray,
+    max_depth: float | None = None,
+    kp_depth: float = 0,
+    limit: float = 15,
 ) -> object:
     """Generate a Plotly figure for a terrain profile.
 
@@ -204,7 +212,9 @@ def generate_plotly_profile(
 
 
 def generate_terraincriteria_line(
-    prof: np.ndarray, limit: float = 15, depth: float = 0
+    prof: np.ndarray,
+    limit: float = 15,
+    depth: float = 0,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Generate a terrain criteria line for a profile.
 
@@ -262,7 +272,8 @@ def polygonize_results(
 
 
 def rasterize_shape(
-    shapes: gpd.GeoDataFrame | list[BaseGeometry], dem_profile: rasterio.profiles.Profile | dict
+    shapes: gpd.GeoDataFrame | list[BaseGeometry],
+    dem_profile: rasterio.profiles.Profile | dict,
 ) -> np.ndarray:
     """Rasterize geometries into a binary array.
 
@@ -509,7 +520,8 @@ def _clip_single_line(base_line, crossing_line):
 
 
 def clip_crossing_lines(
-    base_line: LineString | MultiLineString, crossing_line: LineString | MultiLineString
+    base_line: LineString | MultiLineString,
+    crossing_line: LineString | MultiLineString,
 ) -> BaseGeometry:
     """Clip a line at its intersections with a base line.
 
@@ -775,7 +787,9 @@ def generate_points_along_lines(gdf: gpd.GeoDataFrame, max_distance: float) -> D
 
 
 def extract_elevation_values_for_points(
-    point_array: np.ndarray, elevation_array: np.ndarray, raster_profile: dict
+    point_array: np.ndarray,
+    elevation_array: np.ndarray,
+    raster_profile: dict,
 ) -> np.ndarray:
     """Extract elevation values from a DEM for point coordinates.
 
@@ -808,7 +822,10 @@ def extract_elevation_values_for_points(
 
 
 def create_terrain_profile(
-    line: BaseGeometry | gpd.GeoDataFrame, dem_array: np.ndarray, profile: dict, resolution: float = 5.0
+    line: BaseGeometry | gpd.GeoDataFrame,
+    dem_array: np.ndarray,
+    profile: dict,
+    resolution: float = 5.0,
 ) -> tuple[list, np.ndarray]:
     """Create a terrain profile along a line from a DEM.
 

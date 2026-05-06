@@ -10,8 +10,8 @@ from rasterio.features import shapes
 
 from . import utils
 
-warnings.simplefilter(action='ignore', category=UserWarning)
-warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action="ignore", category=UserWarning)
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,9 @@ def run_terrain_criteria(
         elif np.all(source.geom_type == "Point"):
             source_points = source.get_coordinates().values
         else:
-            raise ValueError("source must be a geodataframe of LineStrings/MultiLineStrings or Points") # I left this so we can track possible errors
+            raise ValueError(
+                "source must be a geodataframe of LineStrings/MultiLineStrings or Points"
+            )  # I left this so we can track possible errors
     elif isinstance(source, np.ndarray):
         source_points = source
 
@@ -57,12 +59,12 @@ def run_terrain_criteria(
             bounds=bounds,
             points=source_points,
             point_depth=source_depth,
-            out_filename=tempdir+'/tc',
+            out_filename=tempdir + "/tc",
             mask=mask,
             h_min=h_min,
             reclassify_results=reclassify_results,
             classes=classes,
-            custom_raster=custom_raster
+            custom_raster=custom_raster,
         )
 
     return tc
@@ -79,17 +81,14 @@ def generate_source_points(polylines: gpd.GeoDataFrame, distance_chainage: float
         Numpy array with the coordinates (x, y) of the source points.
     """
     points_coords_list = []
-    for pline in polylines.itertuples():
-
-        line_gdf = pline.geometry
-        length = line_gdf.length
+    for _, geom in polylines[["geometry"]].iterrows():
+        line_geom = geom.geometry
+        length = line_geom.length
 
         n_points = int(max(length / distance_chainage, 5))
-        new_points = [line_gdf.interpolate(i / float(n_points - 1), normalized=True)
-                      for i in range(n_points)
-                      ]
+        new_points = [line_geom.interpolate(i / float(n_points - 1), normalized=True) for i in range(n_points)]
         points_coords_list.append(
-            [[pp.coords.xy[0][0], pp.coords.xy[1][0]] for pp in new_points]
+            [[pp.coords.xy[0][0], pp.coords.xy[1][0]] for pp in new_points],
         )
 
     points_coords = np.concatenate(points_coords_list)
@@ -127,6 +126,7 @@ def terrain_criteria(
     out_filename = out_filename.split(".")[0]  # keep the name without extension
 
     if custom_raster is None:
+        assert bounds is not None, "bounds required when custom_raster is not provided"
         try:
             window_data = utils.get_hoydedata(bounds)
         except MemoryError:
@@ -147,9 +147,15 @@ def terrain_criteria(
     try:
         with rasterio.open(f"{out_filename}.tif", "w+", **raster_profile) as out:
             for index, window in enumerate(windows):
-                results_window = compute_from_windows(windows_dems[index], windows_transforms[index], points,
-                                                      nan_value, h_min, reclassify_results=reclassify_results,
-                                                      classes=classes)
+                results_window = compute_from_windows(
+                    windows_dems[index],
+                    windows_transforms[index],
+                    points,
+                    nan_value,
+                    h_min,
+                    reclassify_results=reclassify_results,
+                    classes=classes,
+                )
                 out.write(results_window, window=window, indexes=1)
 
             result_raster = out.read(1)
@@ -238,7 +244,9 @@ def clip_results_to_mask(results_gpd: gpd.GeoDataFrame, mask: gpd.GeoDataFrame) 
 
 
 def polygonize_terrain_criteria(
-    result_raster: np.ndarray, raster_transform: rasterio.transform.Affine, crs: int = 25833
+    result_raster: np.ndarray,
+    raster_transform: rasterio.transform.Affine,
+    crs: int = 25833,
 ) -> gpd.GeoDataFrame:
     """Polygonize terrain criteria results, filtering away flat areas.
 
@@ -253,8 +261,10 @@ def polygonize_terrain_criteria(
         GeoDataFrame with polygonized terrain criteria results.
     """
 
-    results = ({"properties": {"slope": int(v)}, "geometry": s}
-               for _, (s, v) in enumerate(shapes(result_raster.astype(np.int16), mask=None, transform=raster_transform)))
+    results = (
+        {"properties": {"slope": int(v)}, "geometry": s}
+        for _, (s, v) in enumerate(shapes(result_raster.astype(np.int16), mask=None, transform=raster_transform))
+    )
     geoms = list(results)
     gpd_polygonized_raster = gpd.GeoDataFrame.from_features(geoms)
     gpd_polygonized_raster = gpd_polygonized_raster[gpd_polygonized_raster.slope >= 1]

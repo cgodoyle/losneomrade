@@ -17,8 +17,8 @@ from tqdm.notebook import tqdm
 
 from . import utils
 
-warnings.simplefilter(action='ignore', category=UserWarning)
-warnings.simplefilter(action='ignore', category=FutureWarning)
+warnings.simplefilter(action="ignore", category=UserWarning)
+warnings.simplefilter(action="ignore", category=FutureWarning)
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +54,8 @@ def run_retrogression(
         returns a tuple of (GeoDataFrame, list of animation frames).
     """
     if custom_raster is None:
-        dem_data = utils.get_hoydedata(bounds, )
+        assert bounds is not None, "bounds required when custom_raster is not provided"
+        dem_data = utils.get_hoydedata(bounds)
     else:
         dem_data = utils.generate_windows(custom_raster)
 
@@ -69,9 +70,16 @@ def run_retrogression(
     rel = utils.rasterize_shape(rel_shape, dem_profile)
 
     release, anim = landslide_retrogression(
-        dem_array, rel, dem_profile["transform"], initial_release_depth=point_depth,
-        min_slope=min_slope, min_height=min_height, min_length=min_length, mask=mask_msml,
-        verbose=verbose)
+        dem_array,
+        rel,
+        dem_profile["transform"],
+        initial_release_depth=point_depth,
+        min_slope=min_slope,
+        min_height=min_height,
+        min_length=min_length,
+        mask=mask_msml,
+        verbose=verbose,
+    )
 
     akt = utils.polygonize_results(release, dem_profile, field="slope").to_crs(epsg=25833)
     if return_animation:
@@ -128,7 +136,7 @@ def landslide_retrogression(
     max_iter = int(max_length // res)
 
     # shut up RuntimeWarning
-    np.seterr(divide='ignore', invalid='ignore')
+    np.seterr(divide="ignore", invalid="ignore")
 
     initial_release = initial_release.astype(bool)
 
@@ -199,10 +207,10 @@ def landslide_retrogression(
 
             # Filter source points (vectorized)
             relevant_mask = (
-                (source_coords[:, 0] >= s_xmin) &
-                (source_coords[:, 0] <= s_xmax) &
-                (source_coords[:, 1] >= s_ymin) &
-                (source_coords[:, 1] <= s_ymax)
+                (source_coords[:, 0] >= s_xmin)
+                & (source_coords[:, 0] <= s_xmax)
+                & (source_coords[:, 1] >= s_ymin)
+                & (source_coords[:, 1] <= s_ymax)
             )
 
             relevant_sources = source_coords[relevant_mask]
@@ -213,7 +221,10 @@ def landslide_retrogression(
                 # Compute slopes against filtered source
                 if slope_chunk_size is not None:
                     slopes = utils.compute_slope_chunked(
-                        cand_coords, relevant_sources, h_min=min_height, chunk_size=slope_chunk_size
+                        cand_coords,
+                        relevant_sources,
+                        h_min=min_height,
+                        chunk_size=slope_chunk_size,
                     )
                 else:
                     slopes = utils.compute_slope(cand_coords, relevant_sources, h_min=min_height)
@@ -254,12 +265,11 @@ def landslide_retrogression(
             pbar.update(1)
 
     if np.all(release == initial_release) and min_iter > 0:
-         # This handles the case where min_iter > 0 but masking prevented any expansion
-         # Or if min_iter=0 and no propagation happened.
-         pass
+        # This handles the case where min_iter > 0 but masking prevented any expansion
+        # Or if min_iter=0 and no propagation happened.
+        pass
 
     return release, animation
-
 
 
 def run_retrogression_with_initial_landslide(
@@ -299,7 +309,8 @@ def run_retrogression_with_initial_landslide(
         retro_slope = [retro_slope]
 
     if custom_raster is None:
-        dem_data = utils.get_hoydedata(bounds, )
+        assert bounds is not None, "bounds required when custom_raster is not provided"
+        dem_data = utils.get_hoydedata(bounds)
     else:
         dem_data = utils.generate_windows(custom_raster)
 
@@ -316,31 +327,29 @@ def run_retrogression_with_initial_landslide(
     min_length_first = min_length * ini_slope
     min_length_second = min_length - min_length_first
 
-
     release_first, animation_first = landslide_retrogression(
         dem_array,
-        rel, dem_profile["transform"],
+        rel,
+        dem_profile["transform"],
         initial_release_depth=point_depth,
         min_slope=ini_slope,
         min_height=min_height,
         min_length=min_length_first,
         mask=mask_msml,
-        verbose=False)
+        verbose=False,
+    )
 
     if np.all(release_first == rel) or release_first.sum() == 0:
-
         akt = gpd.GeoDataFrame(columns=["geometry", "slope"], crs=25833)
         animation_second = []
 
     else:
-
         first_release = utils.polygonize_results(release_first, dem_profile, field="slope").to_crs(epsg=25833)
         first_release["slope"] = ini_slope
 
         release_list = [first_release]
 
         for slope in retro_slope:
-
             release_second, animation_second = landslide_retrogression(
                 dem=dem_array,
                 initial_release=release_first,
@@ -351,16 +360,14 @@ def run_retrogression_with_initial_landslide(
                 max_length=2000,
                 initial_release_depth=0,
                 mask=mask_msml,
-                verbose=False
+                verbose=False,
             )
-
 
             second_release = utils.polygonize_results(release_second, dem_profile, field="slope").to_crs(epsg=25833)
             second_release["slope"] = slope
             release_list.append(second_release)
 
-        akt = pd.concat(release_list, ignore_index=True)
-
+        akt = gpd.GeoDataFrame(pd.concat(release_list, ignore_index=True))
 
     if return_animation:
         animation = animation_first + [animation_first[-1] for _ in range(100)] + animation_second
@@ -427,7 +434,7 @@ def landslide_retrogression_legacy(
     max_iter = int(max_length // res)
 
     # shut up RuntimeWarning
-    np.seterr(divide='ignore', invalid='ignore')
+    np.seterr(divide="ignore", invalid="ignore")
 
     n_iter = 1
 
@@ -445,7 +452,6 @@ def landslide_retrogression_legacy(
 
     with tqdm(total=0, desc="iterations", disable=not verbose) as pbar:
         while n_iter < max_iter:
-
             buffered = apply_mask(create_buffer(release, 1), mask)
 
             i_buffered, j_buffered = np.where(buffered == 1)
@@ -457,8 +463,9 @@ def landslide_retrogression_legacy(
             slopes = utils.compute_slope(buffered_coords, release_coords, h_min=min_height)
 
             if n_iter > min_iter:
-                neighbours_filtered = [(i_buffered[ii], j_buffered[ii]) for ii in
-                                       list(np.where(np.array(slopes) > min_slope)[0])]
+                neighbours_filtered = [
+                    (i_buffered[ii], j_buffered[ii]) for ii in list(np.where(np.array(slopes) > min_slope)[0])
+                ]
 
                 release_after = release.copy()
 
@@ -481,8 +488,8 @@ def landslide_retrogression_legacy(
 
     if np.all(release == initial_release_buffered):
         logger.warning(
-            f"No propagation beyond minimum length of {min_length} m / {min_iter+1} iterations. "
-            "Returning original release area."
+            f"No propagation beyond minimum length of {min_length} m / {min_iter + 1} iterations. "
+            "Returning original release area.",
         )
         release = initial_release
     return release, animation
@@ -506,7 +513,9 @@ def create_buffer(image: np.ndarray, buffer_size: int = 1) -> np.ndarray:
 
 
 def animate_landslide_retrogresion(
-    animation: list[np.ndarray], dem: np.ndarray, frame_step: int | None = None
+    animation: list[np.ndarray],
+    dem: np.ndarray,
+    frame_step: int | None = None,
 ) -> go.Figure:
     """Create a plotly animation of the landslide retrogression.
 
@@ -523,32 +532,31 @@ def animate_landslide_retrogresion(
     if frame_step is None:
         frame_step = len(animation) // 5 if len(animation) // 5 > 1 else 2
 
-    color_red = 'rgba(255, 0, 0, 0.5)'
-    color_white = 'rgba(255, 255, 255, 0.0)'
+    color_red = "rgba(255, 0, 0, 0.5)"
+    color_white = "rgba(255, 255, 255, 0.0)"
     basemap = hillshade_img(dem, 1)
-    fig_data = [basemap,
-                go.Heatmap(z=animation[0], colorscale=[[0, color_white], [1, color_red]], showscale=False)]
+    fig_data = [basemap, go.Heatmap(z=animation[0], colorscale=[[0, color_white], [1, color_red]], showscale=False)]
     fig = go.Figure(
         data=fig_data,
         layout=go.Layout(
             title="Step 0",
-            updatemenus=[dict(
-                type="buttons",
-                buttons=[dict(label="Play",
-                              method="animate",
-                              args=[None])])]
+            updatemenus=[dict(type="buttons", buttons=[dict(label="Play", method="animate", args=[None])])],
         ),
     )
 
-    frames = [go.Frame(data=[basemap,
-                             go.Heatmap(z=animation[i], colorscale=[[0, color_white], [1, color_red]],
-                                        showscale=False)],
-                       layout=go.Layout(title_text=f"Step {i}"))
-              for i in range(1, len(animation), frame_step)]
-    frames.append(go.Frame(data=[basemap,
-                                 go.Heatmap(z=animation[-1], colorscale=[[0, color_white], [1, color_red]],
-                                            showscale=False)],
-                           layout=go.Layout(title_text=f"Step {len(animation)}")))
+    frames = [
+        go.Frame(
+            data=[basemap, go.Heatmap(z=animation[i], colorscale=[[0, color_white], [1, color_red]], showscale=False)],
+            layout=go.Layout(title_text=f"Step {i}"),
+        )
+        for i in range(1, len(animation), frame_step)
+    ]
+    frames.append(
+        go.Frame(
+            data=[basemap, go.Heatmap(z=animation[-1], colorscale=[[0, color_white], [1, color_red]], showscale=False)],
+            layout=go.Layout(title_text=f"Step {len(animation)}"),
+        )
+    )
     fig.frames = frames
 
     height, width = dem.shape
@@ -556,8 +564,12 @@ def animate_landslide_retrogresion(
     fig.update_xaxes(scaleanchor="y")
     fig.update_yaxes(scaleratio=1, autorange="reversed")
     fig.update_layout(xaxis_range=[0, width], yaxis_range=[0, height])
-    fig.update_layout(width=500, height=500, coloraxis_showscale=False, plot_bgcolor=color_white,
-                      )
+    fig.update_layout(
+        width=500,
+        height=500,
+        coloraxis_showscale=False,
+        plot_bgcolor=color_white,
+    )
 
     return fig
 
@@ -573,7 +585,7 @@ def hillshade_img(dem_array: np.ndarray, ve: float = 1) -> go.Image:
         Plotly Image trace with hillshade rendering.
     """
     ls = LightSource(azdeg=315, altdeg=45)
-    hilsh = ls.shade(dem_array, vert_exag=ve, blend_mode="hsv", cmap=plt.cm.gray, dx=5, dy=5)
+    hilsh = ls.shade(dem_array, vert_exag=ve, blend_mode="hsv", cmap=plt.get_cmap("gray"), dx=5, dy=5)
     img = np.array((255 * hilsh[:, :, :3] + 0.5), int)
     return go.Image(z=img)
 
@@ -601,17 +613,18 @@ def plot_hillshade_overlay(
     """
     import matplotlib.colors as mcolors
     from matplotlib.colors import LightSource
-    current_backend = plt.get_backend()
-    plt.switch_backend('Agg')
 
-    cmap = mcolors.ListedColormap(['none', 'red'])
+    current_backend = plt.get_backend()
+    plt.switch_backend("Agg")
+
+    cmap = mcolors.ListedColormap(["none", "red"])
     bounds = [-0.5, 0.5, 1.5]
     norm = mcolors.BoundaryNorm(bounds, cmap.N)
 
     ls = LightSource(azdeg=315, altdeg=45)
 
     fig, ax = plt.subplots(figsize=figsize)
-    _ = ax.imshow(ls.hillshade(dem, vert_exag=ve, dx=res, dy=res), cmap='gray')
+    _ = ax.imshow(ls.hillshade(dem, vert_exag=ve, dx=res, dy=res), cmap="gray")
     _ = ax.imshow(overlay, cmap=cmap, norm=norm, alpha=alpha)
 
     plt.switch_backend(current_backend)
@@ -620,7 +633,10 @@ def plot_hillshade_overlay(
 
 
 def gen_animation(
-    dem: np.ndarray, animation: list[np.ndarray], skip_frames: int = 10, filename: str | None = None
+    dem: np.ndarray,
+    animation: list[np.ndarray],
+    skip_frames: int = 10,
+    filename: str | None = None,
 ) -> list:
     """Generate a GIF animation from retrogression frames.
 
@@ -638,7 +654,7 @@ def gen_animation(
 
     for fig in fig_list:
         buffer = io.BytesIO()
-        fig.savefig(buffer, format='png')
+        fig.savefig(buffer, format="png")
         buffer.seek(0)
 
         img = Image.open(buffer)
@@ -661,11 +677,11 @@ def save_frames(dem_array: np.ndarray, animation: list[np.ndarray], out_dir: str
         skip_frames: Number of frames to skip between saves.
     """
     current_backend = plt.get_backend()
-    plt.switch_backend('Agg')
+    plt.switch_backend("Agg")
     os.makedirs(out_dir, exist_ok=True)
     n_frames = len(animation[::skip_frames])
     for ii, ani in tqdm(enumerate(animation[::skip_frames]), total=n_frames, desc="saving frames"):
         fig = plot_hillshade_overlay(dem_array, ani)
-        fig.savefig(f'{out_dir}\\gif_frame_{ii}.png')
+        fig.savefig(f"{out_dir}\\gif_frame_{ii}.png")
         fig.clf()
     plt.switch_backend(current_backend)
