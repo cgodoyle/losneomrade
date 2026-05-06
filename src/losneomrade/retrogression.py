@@ -12,6 +12,7 @@ from matplotlib import pyplot as plt
 from matplotlib.colors import LightSource
 from PIL import Image
 from scipy.ndimage import binary_dilation
+from shapely.geometry.base import BaseGeometry
 from tqdm.notebook import tqdm
 
 from . import utils
@@ -273,7 +274,7 @@ def landslide_retrogression(dem: np.ndarray,
 
 def run_retrogression_with_initial_landslide(
         bounds: tuple,
-        rel_shape: gpd.GeoDataFrame,
+        rel_shape: list[BaseGeometry],
         point_depth: float = 0.0,
         clip_to_msml=False,
         custom_msml: gpd.GeoDataFrame=None,
@@ -290,7 +291,7 @@ def run_retrogression_with_initial_landslide(
 
     Args:
         bounds (tuple): xmin, ymin, xmax, ymax
-        rel_shape (gpd.GeoDataFrame): release area as a geodataframe (any type of geometry)
+        rel_shape (list): release area as a list of shapely's BaseGeometries
         point_depth (float): depth of the source points (/line/polygon)
         clip_to_msml (bool): wheter to clip against MSML (sammenhengede forekomster).
         ini_slope (list): list with slope of the landslide's release area to compute.

@@ -39,3 +39,6 @@ venv/
 # Test notebooks
 notebooks_test/
 *no_github*.*
+
+# AI assistant instructions (WIP)
+.github/copilot-instructions.md
