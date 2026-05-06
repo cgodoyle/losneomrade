@@ -46,7 +46,7 @@ def get_hoydedata(
 
     # Check input layer
     if layer not in ["dtm1_32_wcs", "dtm1_33_wcs", "dtm10_32_wcs", "dtm10_33_wcs", "NHM_DTM_25833", "NHM_DTM_25832"]:
-        print("Use a valid API layer (check help).")
+        logger.error(f"Invalid API layer: {layer}")
         return dict()
 
     # Set up request to høydedata
@@ -73,7 +73,7 @@ def get_hoydedata(
             attempts += 1
             time.sleep(wait_time)
     else:
-        print(request_url)
+        logger.error(f"Failed to fetch DEM after {max_retries} attempts. URL: {request_url}")
         raise Exception("Error (Probably area requested is too big/small or høydedata is down)")
 
     windows_dems = []
@@ -91,8 +91,7 @@ def get_hoydedata(
                     windows_transforms.append(rasterio.windows.transform(window, dataset.transform))
 
     except Exception:
-        print(request_url)
-        print("Error (Probably area requested is too big/small or høydedata is down)")
+        logger.error(f"Error reading DEM response. URL: {request_url}")
         raise
 
     return {
@@ -261,7 +260,7 @@ def profile(line, dtm_layer=HOYDEDATA_LAYER, nodata=-9999, fra_crs=4326, to_crs=
             break
         except HTTPError:
             attempt += 1
-            # print(f"Attempt {attempt} failed. Error: {e}")
+            logger.debug(f"Attempt {attempt} failed, retrying...")
             time.sleep(wait)
     if attempt == retries:
         raise Exception("HTTPError")
@@ -276,7 +275,7 @@ def profile(line, dtm_layer=HOYDEDATA_LAYER, nodata=-9999, fra_crs=4326, to_crs=
                     z_dem.append(dem_array[ind[0], ind[1]])
 
     except rasterio.errors.RasterioIOError:
-        print("feil")
+        logger.error("Failed to read DEM raster for profile extraction")
 
     cum_dist = np.cumsum(np.sqrt(np.sum((np.r_[[[0, 0]], np.diff(points_coords, axis=0)[:, :2]]) ** 2, axis=1)))
 
@@ -542,7 +541,6 @@ def get_ar5_mask(bounds, results_offset=100):
     }
 
     response = requests.get(url, params=params)
-    # print(response.url)
     data = response.json()
     features = data.get("features", [])
 
@@ -573,9 +571,7 @@ def get_clipping_mask(bounds, msml=True, ar5=True):
     try:
         mask = base_mask.overlay(mask_ar5, how="difference")
     except Exception as e:
-        print(e)
-        print(len(mask_ar5))
-        print(len(base_mask))
+        logger.error(f"Overlay failed: {e} (ar5={len(mask_ar5)}, base={len(base_mask)})")
         raise
     return mask
 

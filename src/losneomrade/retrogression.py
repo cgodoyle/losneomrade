@@ -1,7 +1,7 @@
 import io
+import logging
 import os
 import warnings
-from typing import Union
 
 import geopandas as gpd
 import numpy as np
@@ -20,6 +20,8 @@ from . import utils
 warnings.simplefilter(action='ignore', category=UserWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+logger = logging.getLogger(__name__)
+
 
 def run_retrogression(bounds: tuple,
                       rel_shape: gpd.GeoDataFrame,
@@ -32,7 +34,7 @@ def run_retrogression(bounds: tuple,
                       return_animation=False,
                       verbose=True) -> gpd.GeoDataFrame:
     """
-    Wrapper function to run landslide retrogression (in a similar way to terrain_criteria.terrain_criteria). 
+    Wrapper function to run landslide retrogression (in a similar way to terrain_criteria.terrain_criteria).
 
     Args:
 
@@ -40,7 +42,7 @@ def run_retrogression(bounds: tuple,
         rel_shape (gpd.GeoDataFrame): release area as a geodataframe (any type of geometry)
         point_depth (float): depth of the source points (/line/polygon)
         clip_to_msml (bool): wheter to clip against MSML (sammenhengede forekomster).
-        min_slope (float): minimum slope of the landslide/slope of the failure line. 
+        min_slope (float): minimum slope of the landslide/slope of the failure line.
                             Default is 1/15 as in NVE's guidelines
         min_height (float): minimum height for checking the slope criterion. Default is 5 m.
         min_length (float): minimum length of the landslide (slope not checked within this length). Default is 75 m.
@@ -97,7 +99,7 @@ def landslide_retrogression(dem: np.ndarray,
     outwards. The propagation is done in 3D, i.e. the landslide can propagate in any direction.
     **Optimization Changes (BFS):**
     This function has been optimized using a Breadth-First Search (BFS) approach for the conditional expansion phase.
-    
+
     1.  **Phase 1 (Unconditional):** Expands the release area unconditionally up to `min_length`.
     2.  **Phase 2 (Conditional BFS):**
         -   Instead of checking every pixel in the release area at every iteration (which is O(N^2) or worse),
@@ -127,10 +129,9 @@ def landslide_retrogression(dem: np.ndarray,
         release (np.ndarray): propagated release area of the landslide as a boolean numpy array
     """
     if verbose:
-        print("Running landslide propagation (Optimized BFS)...")
+        logger.info("Running landslide propagation (Optimized BFS)...")
     if abs(round(dem_transform[0], 2)) != abs(round(dem_transform[4], 2)):
-        if verbose:
-            print("Warning: DEM is not square")
+        logger.warning("DEM is not square")
 
     res = abs(dem_transform[0])
 
@@ -157,7 +158,7 @@ def landslide_retrogression(dem: np.ndarray,
     # (though we could optimize this if animation is not needed, but let's keep it safe)
     for i in range(min_iter):
         # Dilate by 1 to get the rim
-        buffered = create_buffer(current_release, 1) 
+        buffered = create_buffer(current_release, 1)
         # Apply mask
         buffered = apply_mask(buffered, mask)
 
@@ -196,10 +197,10 @@ def landslide_retrogression(dem: np.ndarray,
 
             # Optimization: Filter source points to relevant area
             # We only care about source points that could possibly satisfy the slope condition.
-            # Max relevant distance is bounded by max_length (since we stop there) 
+            # Max relevant distance is bounded by max_length (since we stop there)
             # or by the physical limit (delta_z / min_slope).
             # We use a generous buffer to be safe.
-            search_buffer = max(max_length, 2000) 
+            search_buffer = max(max_length, 2000)
 
             c_xmin, c_ymin = np.min(cand_coords[:, :2], axis=0)
             c_xmax, c_ymax = np.max(cand_coords[:, :2], axis=0)
@@ -209,9 +210,9 @@ def landslide_retrogression(dem: np.ndarray,
 
             # Filter source points (vectorized)
             relevant_mask = (
-                (source_coords[:, 0] >= s_xmin) & 
-                (source_coords[:, 0] <= s_xmax) & 
-                (source_coords[:, 1] >= s_ymin) & 
+                (source_coords[:, 0] >= s_xmin) &
+                (source_coords[:, 0] <= s_xmax) &
+                (source_coords[:, 1] >= s_ymin) &
                 (source_coords[:, 1] <= s_ymax)
             )
 
@@ -284,7 +285,7 @@ def run_retrogression_with_initial_landslide(
         min_length: float = 75,
         custom_raster=None,
         return_animation=False,
-        
+
 ):
     """
     Run landslide retrogression with an initial landslide.
@@ -304,7 +305,7 @@ def run_retrogression_with_initial_landslide(
     """
     if not isinstance(retro_slope, list):
         retro_slope = [retro_slope]
-        
+
     if custom_raster is None:
         dem_data = utils.get_hoydedata(bounds, )
     else:
@@ -328,19 +329,19 @@ def run_retrogression_with_initial_landslide(
     min_length_first = min_length * ini_slope
     min_length_second = min_length - min_length_first
 
-    
+
     release_first, animation_first = landslide_retrogression(
-        dem_array, 
-        rel, dem_profile["transform"], 
+        dem_array,
+        rel, dem_profile["transform"],
         initial_release_depth=point_depth,
-        min_slope=ini_slope, 
-        min_height=min_height, 
-        min_length=min_length_first, 
+        min_slope=ini_slope,
+        min_height=min_height,
+        min_length=min_length_first,
         mask=mask_msml,
         verbose=False)
 
     if np.all(release_first == rel) or release_first.sum() == 0:
-        
+
         akt = gpd.GeoDataFrame(columns=["geometry", "slope"], crs=25833)
         animation_second = []
 
@@ -365,7 +366,7 @@ def run_retrogression_with_initial_landslide(
                 mask=mask_msml,
                 verbose=False
             )
-            
+
 
             second_release = utils.polygonize_results(release_second, dem_profile, field="slope").to_crs(epsg=25833)
             second_release["slope"] = slope
@@ -379,7 +380,7 @@ def run_retrogression_with_initial_landslide(
         akt = (akt, animation)
     return akt
 
-  
+
 def apply_mask(array: np.ndarray, mask: np.ndarray) -> np.ndarray:
     """
     Apply a binary mask to a numpy array.
@@ -437,10 +438,9 @@ def landslide_retrogression_legacy(dem: np.ndarray,
 
     """
     if verbose:
-        print("runing landslide propagation...")
+        logger.info("Running landslide propagation (legacy)...")
     if abs(round(dem_transform[0], 2)) != abs(round(dem_transform[4], 2)):
-        if verbose:
-            print("Warning: DEM is not square")
+        logger.warning("DEM is not square")
 
     res = abs(dem_transform[0])
 
@@ -501,9 +501,10 @@ def landslide_retrogression_legacy(dem: np.ndarray,
             pbar.update(1)
 
     if np.all(release == initial_release_buffered):
-        if verbose:
-            print(f"Warning: no propagation besides the minimum length of {min_length} m / {min_iter+1} iterations")
-            print("returning the original release area")
+        logger.warning(
+            f"No propagation beyond minimum length of {min_length} m / {min_iter+1} iterations. "
+            "Returning original release area."
+        )
         release = initial_release
     return release, animation
 
@@ -541,7 +542,7 @@ def animate_landslide_retrogresion(animation: np.ndarray, dem: np.ndarray, frame
         fig (plotly.graph_objects.Figure): figure object with the animation.
 
     """
-    print("Animating landslide retrogression")
+    logger.info("Animating landslide retrogression")
 
     if frame_step is None:
         frame_step = len(animation) // 5 if len(animation) // 5 > 1 else 2

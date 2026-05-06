@@ -1,6 +1,5 @@
-from typing import Any
 import logging
-import os
+from typing import Any
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -9,6 +8,7 @@ from rasterio.profiles import Profile
 from rasterio.transform import array_bounds
 from shapely.geometry import Point, box
 
+from .retrogression import landslide_retrogression
 from .types import PathLike
 from .utils import (
     clip_crossing_lines,
@@ -16,10 +16,11 @@ from .utils import (
     create_terrain_profile,
     generate_envelope_around_points,
     plot_geometries,
-    polygonize_results as polygonize_array,
     rasterize_shape,
 )
-from .retrogression import landslide_retrogression
+from .utils import (
+    polygonize_results as polygonize_array,
+)
 
 logger = logging.getLogger(__name__)
 

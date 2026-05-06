@@ -1,11 +1,11 @@
 import bisect
-import warnings
+import logging
 import tempfile
-from typing import Union
+import warnings
 
-import rasterio
 import geopandas as gpd
 import numpy as np
+import rasterio
 from rasterio.features import shapes
 
 from . import utils
@@ -13,9 +13,11 @@ from . import utils
 warnings.simplefilter(action='ignore', category=UserWarning)
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
+logger = logging.getLogger(__name__)
+
 
 def run_terrain_criteria(bounds: tuple,
-                         source: Union[gpd.GeoDataFrame, np.ndarray],
+                         source: gpd.GeoDataFrame | np.ndarray,
                          source_depth: float = 0.0,
                          clip_to_msml: bool = False,
                          h_min: float = 5,
@@ -26,7 +28,7 @@ def run_terrain_criteria(bounds: tuple,
     Wrapper function for running terrain criteria calculations
     Args:
         bounds: xmin,xmax,ymin,ymax of the calculation window. None if custom_raster is used.
-        source: geodataframe with the source points (LineStrings or Points), 
+        source: geodataframe with the source points (LineStrings or Points),
                 or a numpy array with the coordinates of the source points.
         source_depth: depth of the source points
         clip_to_msml: wheter to clip against MSML (sammenhengede forekomster).
@@ -124,7 +126,7 @@ def terrain_criteria(bounds: tuple,
         try:
             window_data = utils.get_hoydedata(bounds)
         except MemoryError:
-            print("Error: Maybe høydedata is down or your area is too big.")
+            logger.error("Failed to fetch DEM. Høydedata may be down or area is too large.")
             raise
     else:
         window_data = utils.generate_windows(custom_raster)
@@ -142,14 +144,14 @@ def terrain_criteria(bounds: tuple,
         with rasterio.open(f"{out_filename}.tif", "w+", **raster_profile) as out:
             for index, window in enumerate(windows):
                 results_window = compute_from_windows(windows_dems[index], windows_transforms[index], points,
-                                                      nan_value, h_min, reclassify_results=reclassify_results, 
+                                                      nan_value, h_min, reclassify_results=reclassify_results,
                                                       classes=classes)
                 out.write(results_window, window=window, indexes=1)
 
             result_raster = out.read(1)
             raster_transform = out.transform
     except Exception:
-        print("Error writing output raster.")
+        logger.error("Error writing output raster.")
         raise
 
     gpd_polygonized_raster = polygonize_terrain_criteria(result_raster, raster_transform)
@@ -200,7 +202,7 @@ def reclass(matrix: np.ndarray, classes: list=None) -> np.ndarray:
 
     Returns: numpy array with the reclassified terrain criteria results
     """
-    
+
     classes = [0.05, 0.067, 0.2, 0.33, 1.7, 1000] if classes is None else classes
     #         1:20   1:15   1:5   1:3  60 degrees
     reclass_vectorized = np.vectorize(lambda x: bisect.bisect_left(classes, x))
