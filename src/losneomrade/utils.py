@@ -26,14 +26,14 @@ HOYDEDATA_LAYER = settings.hoydedata.layer
 
 
 def dem_coordinates(dem_array: np.ndarray, dem_transform: rasterio.transform.Affine) -> np.ndarray:
-    """
-    get coordinates of the given dem window
+    """Get coordinates for a DEM window.
+
     Args:
-        dem_array: window's elevation array
-        dem_transform: window's transform
+        dem_array: Window elevation array.
+        dem_transform: Transform for the DEM window.
 
     Returns:
-        coords: numpy array with the coordinates (x,y,z) of the dem
+        Numpy array with the coordinates as ``(x, y, z)``.
     """
     height, width = dem_array.shape
     cols, rows = np.meshgrid(np.arange(width), np.arange(height))
@@ -45,16 +45,16 @@ def dem_coordinates(dem_array: np.ndarray, dem_transform: rasterio.transform.Aff
 
 
 def compute_slope(coords: np.ndarray, points: np.ndarray, h_min: float = 5, nodata: int = -9999) -> np.ndarray:
-    """
-    Compute the slopes of the given dem with respect to the (source) points
+    """Compute slopes for DEM coordinates relative to source points.
+
     Args:
-        coords: dem window coordinates
-        points: source point coordinates
-        h_min: minimum height difference where slopes are calculated
-        nodata: value given to pixels with no data
+        coords: DEM window coordinates.
+        points: Source point coordinates.
+        h_min: Minimum height difference where slopes are calculated.
+        nodata: Value assigned to pixels with no data.
 
     Returns:
-        max_slope: array with slopes (same shape as input dem)
+        Array with slopes for each DEM coordinate.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -74,17 +74,17 @@ def compute_slope(coords: np.ndarray, points: np.ndarray, h_min: float = 5, noda
 def compute_slope_chunked(
     coords: np.ndarray, points: np.ndarray, h_min: float = 5, nodata: int = -9999, chunk_size: int = 1000
 ) -> np.ndarray:
-    """
-    Compute the slopes of the given dem with respect to the (source) points using chunked processing
-    to avoid memory explosion.
+    """Compute slopes for DEM coordinates relative to source points in chunks.
+
     Args:
-        coords: dem window coordinates
-        points: source point coordinates
-        h_min: minimum height difference where slopes are calculated
-        nodata: value given to pixels with no data
-        chunk_size: number of points to process in each batch
+        coords: DEM window coordinates.
+        points: Source point coordinates.
+        h_min: Minimum height difference where slopes are calculated.
+        nodata: Value assigned to pixels with no data.
+        chunk_size: Number of points to process in each batch.
+
     Returns:
-        max_slope: array with slopes (same shape as input dem)
+        Array with slopes for each DEM coordinate.
     """
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -110,14 +110,14 @@ def compute_slope_chunked(
 
 
 def set_z_from_raster(points_xy: np.ndarray, window_data: dict) -> np.ndarray:
-    """
-    Set elevation value to the given x,y points
+    """Set elevation values for the given ``x, y`` points.
+
     Args:
-        points_xy: numpy array with the x,y coordinates to the points
-        window_data: DEM-results from calling get_hoydedata function
+        points_xy: Array with ``x, y`` coordinates for the points.
+        window_data: DEM results from calling ``get_hoydedata``.
 
-    Returns: numpy array with x,y,z coordinates
-
+    Returns:
+        Numpy array with ``x, y, z`` coordinates.
     """
     height = window_data["profile"]["height"]
     width = window_data["profile"]["width"]
@@ -140,16 +140,19 @@ def set_z_from_raster(points_xy: np.ndarray, window_data: dict) -> np.ndarray:
 
 
 
-def generate_plotly_profile(prof, max_depth=None, kp_depth=0, limit=15):
-    """
-    Generate a plotly figure with the profile
+def generate_plotly_profile(
+    prof: np.ndarray, max_depth: float | None = None, kp_depth: float = 0, limit: float = 15
+) -> object:
+    """Generate a Plotly figure for a terrain profile.
+
     Args:
-        prof: numpy array with X, Y, Z, M values
-        max_depth: maximum depth to be used for the base of the profile
+        prof: Numpy array with ``X, Y, Z, M`` values.
+        max_depth: Maximum depth to use for the base of the profile.
+        kp_depth: Depth offset to apply to the terrain criteria line.
+        limit: Terrain criteria ratio expressed as ``1:limit``.
 
     Returns:
-        fig: plotly figure
-
+        Plotly figure for the profile.
     """
     import plotly.graph_objects as go
 
@@ -202,17 +205,16 @@ def generate_plotly_profile(prof, max_depth=None, kp_depth=0, limit=15):
     return fig
 
 
-def generate_terraincriteria_line(prof, limit=15, depth=0):
-    """
-    Generate a line with the terrain criteria (by default 1:15)
+def generate_terraincriteria_line(prof: np.ndarray, limit: float = 15, depth: float = 0) -> tuple[np.ndarray, np.ndarray]:
+    """Generate a terrain criteria line for a profile.
+
     Args:
-        prof: numpy array with X, Y, Z, M values
-        limit: Limit in vertical/horizontal ratio (1:limit) to be used for the terrain criteria
-        depth: depth to be used for the line
+        prof: Numpy array with ``X, Y, Z, M`` values.
+        limit: Terrain criteria ratio expressed as ``1:limit``.
+        depth: Depth offset to apply to the line.
 
     Returns:
-        m: numpy array with the M values
-        z: numpy array with the Z values
+        Tuple with the profile ``M`` values and generated ``Z`` values.
     """
     z = prof[:, -2]
     m = prof[:, -1]
@@ -226,12 +228,12 @@ def generate_terraincriteria_line(prof, limit=15, depth=0):
 
 
 def polygonize_results(
-    result_array: np.ndarray, dem_profile: rasterio.profiles.Profile | dict, field="value", threshold_value=1
-):
+    result_array: np.ndarray,
+    dem_profile: rasterio.profiles.Profile | dict,
+    field: str = "value",
+    threshold_value: int | float = 1,
+) -> gpd.GeoDataFrame:
     """Polygonize a raster array into a GeoDataFrame.
-
-    Converts pixels with values greater than or equal to the threshold into
-    vector polygons.
 
     Args:
         result_array: Array with the results to polygonize.
@@ -262,14 +264,14 @@ def polygonize_results(
 def rasterize_shape(
     shapes: gpd.GeoDataFrame | list[BaseGeometry], dem_profile: rasterio.profiles.Profile | dict
 ) -> np.ndarray:
-    """Rasterize geometries into a binary numpy array.
+    """Rasterize geometries into a binary array.
 
     Args:
         shapes: Geometries as a GeoDataFrame or list of shapely geometries.
-        dem_profile: Rasterio profile (must contain 'height', 'width', 'transform').
+        dem_profile: Rasterio profile containing ``height``, ``width``, and ``transform``.
 
     Returns:
-        Binary numpy array with 1 where geometries are present, 0 elsewhere.
+        Binary array with ``1`` where geometries are present and ``0`` elsewhere.
     """
     dem_height = dem_profile["height"]
     dem_width = dem_profile["width"]
@@ -295,14 +297,15 @@ def rasterize_shape(
     return rasterized
 
 
-def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
-    """
-    Get the MSML mask as an array for the given bounds
+def get_msml_mask(bounds: tuple[float, float, float, float], results_offset: int = 100) -> gpd.GeoDataFrame:
+    """Get the MSML mask for the given bounds.
+
     Args:
-        bounds: tuple with the bounds (xmin, ymin, xmax, ymax)
+        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
+        results_offset: Number of results to offset in each request.
 
     Returns:
-        mask: geopandas dataframe if dem_profile is None
+        GeoDataFrame with the combined MSML mask.
     """
 
     mask_msml = get_maringrense(bounds, "msml", results_offset)
@@ -313,18 +316,18 @@ def get_msml_mask(bounds: tuple, results_offset=100) -> gpd.GeoDataFrame:
     return gpd.clip(mask_gpd, bounds).dissolve()
 
 
-def get_maringrense(bounds, layer, results_offset=100):
-    """
-    Retrieves the MarinGrense data within the specified bounds and layer.
+def get_maringrense(
+    bounds: tuple[float, float, float, float], layer: str, results_offset: int = 100
+) -> gpd.GeoDataFrame:
+    """Retrieve MarinGrense data within the specified bounds.
 
     Args:
-        bounds (tuple): The bounding box coordinates (xmin, ymin, xmax, ymax).
-        layer (str): The layer name to query. Valid options are "msml" and "area_under_mg".
-        results_offset (int, optional): The number of results to offset in each request. Defaults to 100.
+        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
+        layer: Layer name to query. Valid options are ``"msml"`` and ``"area_under_mg"``.
+        results_offset: Number of results to offset in each request.
 
     Returns:
-        gpd.GeoDataFrame: A GeoDataFrame containing the MarinGrense data.
-
+        GeoDataFrame containing the MarinGrense data.
     """
 
     xmin, ymin, xmax, ymax = bounds
@@ -354,7 +357,15 @@ def get_maringrense(bounds, layer, results_offset=100):
     return gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
 
 
-def check_maringrense():
+def check_maringrense() -> bool:
+    """Check whether the MarinGrense service responds successfully.
+
+    Args:
+        None.
+
+    Returns:
+        ``True`` if the service returns valid data, otherwise ``False``.
+    """
     xmin, ymin, xmax, ymax = 265122.0, 6648110.0, 266151.0, 6648761.0
     layer_dict = {"msml": 7, "area_under_mg": 8}
 
@@ -380,10 +391,15 @@ def check_maringrense():
             return True
 
 
-def get_ar5_mask(bounds, results_offset=100):
-    """
-    Retrieves the AR5 data for "grunnlendt" and "fjell i dagen" within the specified bounds.
+def get_ar5_mask(bounds: tuple[float, float, float, float], results_offset: int = 100) -> gpd.GeoDataFrame:
+    """Retrieve AR5 mask data within the specified bounds.
 
+    Args:
+        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
+        results_offset: Number of results to offset in each request.
+
+    Returns:
+        GeoDataFrame containing AR5 features for ``grunnlendt`` and ``fjell i dagen``.
     """
 
     xmin, ymin, xmax, ymax = bounds
@@ -416,7 +432,19 @@ def get_ar5_mask(bounds, results_offset=100):
     return gdf
 
 
-def get_clipping_mask(bounds, msml=True, ar5=True):
+def get_clipping_mask(
+    bounds: tuple[float, float, float, float], msml: bool = True, ar5: bool = True
+) -> gpd.GeoDataFrame | None:
+    """Get a combined clipping mask for the given bounds.
+
+    Args:
+        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
+        msml: Whether to include the MSML mask.
+        ar5: Whether to subtract the AR5 mask.
+
+    Returns:
+        Combined clipping mask, or ``None`` when no masks are requested.
+    """
     if not msml and not ar5:
         return None
     mask_msml = get_msml_mask(bounds) if msml else None
@@ -434,17 +462,19 @@ def get_clipping_mask(bounds, msml=True, ar5=True):
 
 
 def modify_release_mask(
-    release_mask, no_release_mask: gpd.GeoDataFrame = None, sup_release_mask: gpd.GeoDataFrame = None
-):
-    """
-    Modify the release mask by removing the no release areas and adding the supplementary release areas
+    release_mask: gpd.GeoDataFrame,
+    no_release_mask: gpd.GeoDataFrame | None = None,
+    sup_release_mask: gpd.GeoDataFrame | None = None,
+) -> gpd.GeoDataFrame:
+    """Modify a release mask with exclusion and supplementary areas.
+
     Args:
-        release_mask: release mask as a geopandas dataframe
-        no_release_mask: no release mask as a geopandas dataframe
-        sup_release_mask: supplementary release mask as a geopandas dataframe
+        release_mask: Release mask as a GeoDataFrame.
+        no_release_mask: Areas to remove from the release mask.
+        sup_release_mask: Areas to add to the release mask.
 
     Returns:
-        release_mask: modified release mask
+        Modified release mask.
     """
 
     if no_release_mask is not None:
@@ -459,14 +489,14 @@ def modify_release_mask(
     return release_mask
 
 
-def generate_windows(custom_raster: str):
-    """
-    Generate windows from a raster in the same way get_hoydedata does.
+def generate_windows(custom_raster: str) -> dict:
+    """Generate raster windows in the same way as ``get_hoydedata``.
+
     Args:
-        custom_raster: path to the raster
+        custom_raster: Path to the raster.
 
     Returns:
-        dictionary with the windows, transforms, dem arrays and the profile of the raster
+        Dictionary with raster windows, transforms, DEM arrays, and profile.
     """
     blockxsize, blockysize = 640, 640
 
@@ -505,15 +535,13 @@ def generate_windows(custom_raster: str):
 
 
 def convert_lines_to_gpd(lines: set) -> gpd.GeoDataFrame:
-    """
-    Function to convert a line into a geopandas dataframe.
-    It is used to save the profiles that are being plotted.
+    """Convert lines into a GeoDataFrame.
 
     Args:
-        lines (set): a set object with the lines taken from the map.
+        lines: Set with line coordinate sequences taken from the map.
 
     Returns:
-        gpd.GeoDataFrame: dataframe in wgs coordinate system
+        GeoDataFrame in WGS84 containing the input lines.
     """
     line_shapes = []
     line_id = []
@@ -528,8 +556,28 @@ def convert_lines_to_gpd(lines: set) -> gpd.GeoDataFrame:
 
 
 def generate_fake_slope(
-    base_length, base_elevation, terrace_length, terrace_elevation, slope_ratio, xmin=2e5, ymax=6e6
-):
+    base_length: float,
+    base_elevation: float,
+    terrace_length: float,
+    terrace_elevation: float,
+    slope_ratio: float,
+    xmin: float = 2e5,
+    ymax: float = 6e6,
+) -> tuple[np.ndarray, dict]:
+    """Generate a synthetic slope DEM for testing.
+
+    Args:
+        base_length: Length of the flat base section.
+        base_elevation: Elevation of the flat base section.
+        terrace_length: Length of the upper terrace section.
+        terrace_elevation: Elevation of the upper terrace section.
+        slope_ratio: Vertical-to-horizontal slope ratio denominator.
+        xmin: Origin ``x`` coordinate for the raster transform.
+        ymax: Origin ``y`` coordinate for the raster transform.
+
+    Returns:
+        Tuple containing the generated DEM array and raster profile.
+    """
 
     resolution = 1
     # Calculate the length of the flat base and the sloped region
@@ -647,18 +695,17 @@ def _clip_single_line(base_line, crossing_line):
         return crossing_line
 
 
-def clip_crossing_lines(base_line, crossing_line):
+def clip_crossing_lines(
+    base_line: LineString | MultiLineString, crossing_line: LineString | MultiLineString
+) -> BaseGeometry:
     """Clip a line at its intersections with a base line.
-
-    Handles both LineString and MultiLineString inputs. Returns the
-    first segment before the crossing point.
 
     Args:
         base_line: LineString or MultiLineString used as the cutting reference.
         crossing_line: LineString or MultiLineString to be clipped.
 
     Returns:
-        The clipped geometry segment, or the original if no crossing found.
+        Clipped geometry segment, or the original geometry if no crossing is found.
     """
     if isinstance(base_line, MultiLineString):
         base_line = linemerge(base_line)
@@ -692,23 +739,20 @@ def clip_crossing_lines(base_line, crossing_line):
 
 
 def create_one_sided_sections_along_line(
-    geometry,
-    spacing=5,
-    length=100,
-    side="right",
-    create_fans=False,
-):
-    """Create equally spaced perpendicular lines on one side of a LineString.
-
-    Generates perpendicular cross-sections at regular intervals along the
-    input line. Optionally creates fan-shaped profiles at the start and end.
+    geometry: LineString | MultiLineString,
+    spacing: float = 5,
+    length: float = 100,
+    side: str = "right",
+    create_fans: bool = False,
+) -> list[LineString]:
+    """Create equally spaced perpendicular lines on one side of a line.
 
     Args:
         geometry: LineString or MultiLineString input line.
         spacing: Distance in meters between perpendicular lines.
         length: Length of each perpendicular line in meters.
-        side: Side to create perpendiculars ("left" or "right").
-        create_fans: Whether to include fan-profiles at start/end of line.
+        side: Side to create perpendiculars on, either ``"left"`` or ``"right"``.
+        create_fans: Whether to include fan profiles at the start and end of the line.
 
     Returns:
         List of perpendicular LineString geometries.
@@ -877,7 +921,7 @@ def generate_points_along_lines(gdf: gpd.GeoDataFrame, max_distance: float) -> g
         max_distance: Maximum distance in meters between generated points.
 
     Returns:
-        GeoDataFrame containing the generated points with original attributes.
+        GeoDataFrame containing generated points with the original attributes.
     """
 
     points_list = []
@@ -920,15 +964,15 @@ def generate_points_along_lines(gdf: gpd.GeoDataFrame, max_distance: float) -> g
 def extract_elevation_values_for_points(
     point_array: np.ndarray, elevation_array: np.ndarray, raster_profile: dict
 ) -> np.ndarray:
-    """Extract elevation values from a DEM for given point coordinates.
+    """Extract elevation values from a DEM for point coordinates.
 
     Args:
-        point_array: Array of (x, y) coordinates.
-        elevation_array: The DEM as a 2D numpy array.
-        raster_profile: Rasterio profile dict (must contain 'transform').
+        point_array: Array of ``(x, y)`` coordinates.
+        elevation_array: DEM as a 2D numpy array.
+        raster_profile: Raster profile dictionary containing ``transform``.
 
     Returns:
-        Array of elevation values, with NaN for out-of-bounds points.
+        Array of elevation values, with ``NaN`` for out-of-bounds points.
     """
     if point_array.shape == (2,):
         points_xy = np.expand_dims(point_array, 0)
@@ -953,17 +997,16 @@ def extract_elevation_values_for_points(
 def create_terrain_profile(
     line: BaseGeometry | gpd.GeoDataFrame, dem_array: np.ndarray, profile: dict, resolution: float = 5.0
 ) -> tuple[list[float], np.ndarray]:
-    """Extract a terrain profile (distances and elevations) along a line from a DEM.
+    """Create a terrain profile along a line from a DEM.
 
     Args:
-        line: LineString geometry or GeoDataFrame with a line geometry.
-        dem_array: The DEM as a 2D numpy array.
-        profile: Rasterio profile dict (must contain 'transform' and 'crs').
+        line: Line geometry or GeoDataFrame with a line geometry.
+        dem_array: DEM as a 2D numpy array.
+        profile: Raster profile dictionary containing ``transform`` and ``crs``.
         resolution: Sampling resolution in meters along the line.
 
     Returns:
-        Tuple of (distances, elevations) where distances is a list of cumulative
-        distances and elevations is an array of corresponding elevation values.
+        Tuple of cumulative distances and corresponding elevation values.
     """
     if isinstance(line, gpd.GeoDataFrame):
         gdf = line.to_crs(profile["crs"])
@@ -983,13 +1026,13 @@ def create_terrain_profile(
 
 
 def generate_envelope_around_points(points: list[Point]) -> BaseGeometry:
-    """Generate a convex hull polygon around a set of points.
+    """Generate a convex hull around a set of points.
 
     Args:
         points: List of shapely Point geometries.
 
     Returns:
-        A shapely polygon (convex hull) enclosing all points.
+        Shapely geometry enclosing all input points.
     """
     return _generate_envelope_around_points_brute_force(points)
 
@@ -1001,18 +1044,21 @@ def _generate_envelope_around_points_brute_force(points: list[Point]) -> BaseGeo
 
 
 def plot_geometries(
-    geometries: list[BaseGeometry] | BaseGeometry, ax=None, color: str = "black", alpha: float = 1
-):
+    geometries: list[BaseGeometry] | BaseGeometry,
+    ax: object | None = None,
+    color: str = "black",
+    alpha: float = 1,
+) -> object:
     """Plot shapely geometries on a matplotlib axes.
 
     Args:
         geometries: Single geometry or list of geometries to plot.
-        ax: Matplotlib axes. If None, creates a new figure.
+        ax: Matplotlib axes. If ``None``, a new figure is created.
         color: Color for the plotted geometries.
         alpha: Transparency level.
 
     Returns:
-        The matplotlib axes with the plotted geometries.
+        Matplotlib axes with the plotted geometries.
     """
     if not isinstance(geometries, list):
         geom_list = [geometries]

@@ -16,28 +16,31 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 logger = logging.getLogger(__name__)
 
 
-def run_terrain_criteria(bounds: tuple,
-                         source: gpd.GeoDataFrame | np.ndarray,
-                         source_depth: float = 0.0,
-                         clip_to_msml: bool = False,
-                         h_min: float = 5,
-                         reclassify_results=True,
-                         classes=None,
-                         custom_raster=None) -> gpd.GeoDataFrame:
-    """
-    Wrapper function for running terrain criteria calculations
-    Args:
-        bounds: xmin,xmax,ymin,ymax of the calculation window. None if custom_raster is used.
-        source: geodataframe with the source points (LineStrings or Points),
-                or a numpy array with the coordinates of the source points.
-        source_depth: depth of the source points
-        clip_to_msml: wheter to clip against MSML (sammenhengede forekomster).
-        h_min: minumun height for calculations, default 5m
-        reclassify_results: wheter to return a classified result or a continuous slope value
-        classes: list with the slope values that define the classes to use for reclassification
-        custom_raster: path to a custom raster file (tif) to use for calculations
+def run_terrain_criteria(
+    bounds: tuple | None,
+    source: gpd.GeoDataFrame | np.ndarray,
+    source_depth: float = 0.0,
+    clip_to_msml: bool = False,
+    h_min: float = 5,
+    reclassify_results: bool = True,
+    classes: list[float] | None = None,
+    custom_raster: str | None = None,
+) -> gpd.GeoDataFrame:
+    """Run terrain criteria calculations.
 
-    Returns: geodataframe with the polygonized terrain criteria results
+    Args:
+        bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
+        source: GeoDataFrame with source points (LineStrings or Points),
+            or a numpy array with source point coordinates.
+        source_depth: Depth of the source points in meters.
+        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        h_min: Minimum height difference for calculations in meters.
+        reclassify_results: Whether to return classified result or continuous slope value.
+        classes: Slope values defining class boundaries for reclassification.
+        custom_raster: Path to a custom raster file (tif) for calculations.
+
+    Returns:
+        GeoDataFrame with the polygonized terrain criteria results.
     """
     if isinstance(source, gpd.GeoDataFrame):
         if np.all(source.geom_type.isin(["LineString", "MultiLineString"])):
@@ -66,14 +69,14 @@ def run_terrain_criteria(bounds: tuple,
 
 
 def generate_source_points(polylines: gpd.GeoDataFrame, distance_chainage: float = 5) -> np.ndarray:
-    """
-    Generate source points from geodataframe of LineStrings
+    """Generate source points from a GeoDataFrame of LineStrings.
+
     Args:
-        polylines: geodataframe of polylines (LineStrings)
-        distance_chainage: distance between source points in meters
+        polylines: GeoDataFrame of polylines (LineStrings).
+        distance_chainage: Distance between source points in meters.
 
     Returns:
-        points_coords: numpy array with the coordinates (x,y) of the source points
+        Numpy array with the coordinates (x, y) of the source points.
     """
     points_coords_list = []
     for pline in polylines.itertuples():
@@ -94,31 +97,32 @@ def generate_source_points(polylines: gpd.GeoDataFrame, distance_chainage: float
     return points_coords
 
 
-def terrain_criteria(bounds: tuple,
-                     points: np.ndarray,
-                     out_filename: str,
-                     point_depth: float = 0.0,
-                     clip_to_msml=False,
-                     h_min: float = 5,
-                     reclassify_results=True,
-                     classes=None,
-                     custom_raster=None) -> gpd.GeoDataFrame:
-    """
-    Run calculation of terrain criteria
+def terrain_criteria(
+    bounds: tuple | None,
+    points: np.ndarray,
+    out_filename: str,
+    point_depth: float = 0.0,
+    clip_to_msml: bool = False,
+    h_min: float = 5,
+    reclassify_results: bool = True,
+    classes: list[float] | None = None,
+    custom_raster: str | None = None,
+) -> gpd.GeoDataFrame:
+    """Run terrain criteria calculation on a DEM.
+
     Args:
-        bounds: xmin,xmax,ymin,ymax of the calculation window
-        points: array with the source points (x,y,z)
-        out_filename: path to save results (without extention)
-        point_depth: depth of the source points
-        clip_to_msml: wheter to clip against MSML (sammenhengede forekomster).
-        h_min: minumun height for calculations, default 5m
-        reclassify_results: wheter to return a classified result or a continuous slope value
-        classes: list with the slope values that define the classes to use for reclassification
-        custom_raster: path to a custom raster file (tif) to use for calculations
+        bounds: Bounding box as (xmin, xmax, ymin, ymax).
+        points: Array with the source points (x, y, z).
+        out_filename: Path to save results (without extension).
+        point_depth: Depth of the source points in meters.
+        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        h_min: Minimum height difference for calculations in meters.
+        reclassify_results: Whether to return classified result or continuous slope value.
+        classes: Slope values defining class boundaries for reclassification.
+        custom_raster: Path to a custom raster file (tif) for calculations.
 
-    Returns: Saves a tif and a GeoJson file with the results (areas that fills the terrain criteria), returns
-             a geodataframe.
-
+    Returns:
+        GeoDataFrame with the polygonized terrain criteria results.
     """
     out_filename = out_filename.split(".")[0]  # keep the name without extension
 
@@ -162,21 +166,28 @@ def terrain_criteria(bounds: tuple,
     return gpd_polygonized_raster
 
 
-def compute_from_windows(dem_data, transform, source_points, nan_value=-9999, h_min=5, reclassify_results=True,
-                         classes=None):
-    """
-    Computes the terrain criteria for a given raster window
+def compute_from_windows(
+    dem_data: np.ndarray,
+    transform: rasterio.transform.Affine,
+    source_points: np.ndarray,
+    nan_value: int = -9999,
+    h_min: float = 5,
+    reclassify_results: bool = True,
+    classes: list[float] | None = None,
+) -> np.ndarray:
+    """Compute terrain criteria for a given raster window.
+
     Args:
-        dem_data: array with elevations of the current window
-        transform: transform associated with the current window
-        source_points: x,y,z coordinates of the source points
-        nan_value: raster's nodata value
-        h_min: minumun height for calculations, default 5m
-        reclassify_results: wheter to return a classified result or a continuous slope value
-        classes: list with the slope values that define the classes to use for reclassification
+        dem_data: Array with elevations of the current window.
+        transform: Affine transform associated with the current window.
+        source_points: Array with (x, y, z) coordinates of the source points.
+        nan_value: Raster's nodata value.
+        h_min: Minimum height difference for calculations in meters.
+        reclassify_results: Whether to return classified result or continuous slope value.
+        classes: Slope values defining class boundaries for reclassification.
 
-    Returns: numpy array with classified (or raw) slopes values
-
+    Returns:
+        Numpy array with classified (or raw) slope values.
     """
     results_slope = np.ones_like(dem_data) * nan_value
 
@@ -194,13 +205,16 @@ def compute_from_windows(dem_data, transform, source_points, nan_value=-9999, h_
     return results_slope
 
 
-def reclass(matrix: np.ndarray, classes: list=None) -> np.ndarray:
-    """
-    Reclassifies the terrain criteria results
-    Args:
-        matrix: numpy array with the terrain criteria results
+def reclass(matrix: np.ndarray, classes: list[float] | None = None) -> np.ndarray:
+    """Reclassify terrain criteria results into slope classes.
 
-    Returns: numpy array with the reclassified terrain criteria results
+    Args:
+        matrix: Numpy array with terrain criteria slope values.
+        classes: Slope values defining class boundaries. Defaults to
+            [0.05, 0.067, 0.2, 0.33, 1.7, 1000] (1:20, 1:15, 1:5, 1:3, 60°).
+
+    Returns:
+        Numpy array with reclassified terrain criteria results.
     """
 
     classes = [0.05, 0.067, 0.2, 0.33, 1.7, 1000] if classes is None else classes
@@ -211,14 +225,14 @@ def reclass(matrix: np.ndarray, classes: list=None) -> np.ndarray:
 
 
 def clip_results_to_msml(results_gpd: gpd.GeoDataFrame, bounds: tuple) -> gpd.GeoDataFrame:
-    """
-    Clips results to NGU's MSML layer from NVE's MapServer
+    """Clip results to NGU's MSML layer from NVE's MapServer.
+
     Args:
-        results_gpd: Geodataframe with the results from aktsomhet calculation
-        bounds: bounds of the calculation area (xmin, xmax, ymin, ymax)
+        results_gpd: GeoDataFrame with the terrain criteria results.
+        bounds: Bounds of the calculation area as (xmin, xmax, ymin, ymax).
 
     Returns:
-    Clipped results as geodataframe
+        Clipped results as GeoDataFrame.
     """
     xmin, xmax, ymin, ymax = bounds
 
@@ -232,17 +246,19 @@ def clip_results_to_msml(results_gpd: gpd.GeoDataFrame, bounds: tuple) -> gpd.Ge
 
 
 def polygonize_terrain_criteria(
-        result_raster: np.ndarray, raster_transform: rasterio.transform, crs: int = 25833
+    result_raster: np.ndarray, raster_transform: rasterio.transform.Affine, crs: int = 25833
 ) -> gpd.GeoDataFrame:
-    """
-    Polygonizes the terrain criteria results, filters away flat areas (slope class < 1, slope<1:20)
+    """Polygonize terrain criteria results, filtering away flat areas.
+
+    Removes areas with slope class < 1 (slope < 1:20).
+
     Args:
-        result_raster: numpy array with the terrain criteria results
-        raster_transform: transform of the raster
-        crs: crs of the raster
+        result_raster: Numpy array with the terrain criteria results.
+        raster_transform: Affine transform of the raster.
+        crs: EPSG code of the raster CRS.
 
-    Returns: geodataframe with the polygonized terrain criteria results
-
+    Returns:
+        GeoDataFrame with polygonized terrain criteria results.
     """
 
     results = ({"properties": {"slope": int(v)}, "geometry": s}

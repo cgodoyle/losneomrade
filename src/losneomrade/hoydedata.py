@@ -12,6 +12,7 @@ import geopandas as gpd
 import numpy as np
 import rasterio
 from rasterio import MemoryFile
+from shapely.geometry.base import BaseGeometry
 
 from .config import HoydedataConfig, settings
 
@@ -103,7 +104,7 @@ def get_hoydedata(
 
 
 def profile(
-    line,
+    line: BaseGeometry,
     dtm_layer: str | None = None,
     nodata: int | None = None,
     fra_crs: int = 4326,

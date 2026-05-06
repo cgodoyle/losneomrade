@@ -23,37 +23,35 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 logger = logging.getLogger(__name__)
 
 
-def run_retrogression(bounds: tuple,
-                      rel_shape: gpd.GeoDataFrame,
-                      point_depth: float = 0.0,
-                      clip_to_msml=False,
-                      min_slope: float = 1 / 15,
-                      min_height: float = 5,
-                      min_length: float = 75,
-                      custom_raster=None,
-                      return_animation=False,
-                      verbose=True) -> gpd.GeoDataFrame:
-    """
-    Wrapper function to run landslide retrogression (in a similar way to terrain_criteria.terrain_criteria).
+def run_retrogression(
+    bounds: tuple | None,
+    rel_shape: gpd.GeoDataFrame,
+    point_depth: float = 0.0,
+    clip_to_msml: bool = False,
+    min_slope: float = 1 / 15,
+    min_height: float = 5,
+    min_length: float = 75,
+    custom_raster: str | None = None,
+    return_animation: bool = False,
+    verbose: bool = True,
+) -> gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, list[np.ndarray]]:
+    """Run landslide retrogression from a release area.
 
     Args:
-
-        bounds (tuple): xmin,xmax,ymin,ymax of the calculation window
-        rel_shape (gpd.GeoDataFrame): release area as a geodataframe (any type of geometry)
-        point_depth (float): depth of the source points (/line/polygon)
-        clip_to_msml (bool): wheter to clip against MSML (sammenhengede forekomster).
-        min_slope (float): minimum slope of the landslide/slope of the failure line.
-                            Default is 1/15 as in NVE's guidelines
-        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
-        min_length (float): minimum length of the landslide (slope not checked within this length). Default is 75 m.
-        custom_raster (np.ndarray): custom raster to use for the calculation. Default is None.
-        return_animation (bool): wheter to return the animation of the retrogression. Default is False.
-        verbose (bool): wheter to print progress. Default is True.
+        bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
+        rel_shape: Release area as a GeoDataFrame (any geometry type).
+        point_depth: Depth of the source points/line/polygon in meters.
+        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        min_slope: Minimum slope of the failure line. Default 1/15 per NVE guidelines.
+        min_height: Minimum height for slope criterion in meters.
+        min_length: Minimum length before slope is checked in meters.
+        custom_raster: Path to custom raster file (tif) for calculations.
+        return_animation: Whether to return the animation frames.
+        verbose: Whether to log progress.
 
     Returns:
-        akt (gpd.GeoDataFrame): propagated release area of the landslide as a geodataframe
-        animation (list): list of numpy arrays with the landslide retrogression. Only returned if return_animation=True.
-
+        GeoDataFrame with propagated release area. If return_animation is True,
+        returns a tuple of (GeoDataFrame, list of animation frames).
     """
     if custom_raster is None:
         dem_data = utils.get_hoydedata(bounds, )
@@ -82,51 +80,43 @@ def run_retrogression(bounds: tuple,
     return akt
 
 
-def landslide_retrogression(dem: np.ndarray,
-                            initial_release: np.ndarray,
-                            dem_transform: rasterio.transform.Affine,
-                            min_slope: float = 1 / 15,
-                            min_height: float = 5,
-                            min_length: float = 200,
-                            max_length: float = 2000,
-                            initial_release_depth: float = 0,
-                            mask: np.ndarray = None,
-                            verbose: bool = False,
-                            slope_chunk_size: int = 1000):
-    """
-    Propagates a landslide from a release area in a DEM. Stop criteria is defined by the maximum slope, minimum and
-    maximum length of the landslide. The propagation is done iteratively, starting from the release area and moving
-    outwards. The propagation is done in 3D, i.e. the landslide can propagate in any direction.
-    **Optimization Changes (BFS):**
-    This function has been optimized using a Breadth-First Search (BFS) approach for the conditional expansion phase.
+def landslide_retrogression(
+    dem: np.ndarray,
+    initial_release: np.ndarray,
+    dem_transform: rasterio.transform.Affine,
+    min_slope: float = 1 / 15,
+    min_height: float = 5,
+    min_length: float = 200,
+    max_length: float = 2000,
+    initial_release_depth: float = 0,
+    mask: np.ndarray | None = None,
+    verbose: bool = False,
+    slope_chunk_size: int = 1000,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """Propagate a landslide from a release area in a DEM using BFS.
 
-    1.  **Phase 1 (Unconditional):** Expands the release area unconditionally up to `min_length`.
-    2.  **Phase 2 (Conditional BFS):**
-        -   Instead of checking every pixel in the release area at every iteration (which is O(N^2) or worse),
-            we maintain a "front" of candidate pixels (neighbors of the current release).
-        -   We only check slope criteria for these candidate pixels against relevant source points.
-        -   Pixels that fail the criteria are marked as "checked" and not re-evaluated.
-        -   Pixels that pass are added to the release, and their neighbors become new candidates.
-        -   This reduces redundant calculations significantly.
-    Parameters:
-        dem (np.ndarray): DEM as a numpy array
-        initial_release (np.ndarray): initial release area as a boolean numpy array.
-                                      Must have the same shape and same transform as the DEM.
-        dem_transform (Affine): affine transformation of the DEM/release.
-        min_slope (float): minimum slope of the landslide. Default is 1/15 as in NVE's guidelines
-        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
-        min_length (float): minimum length of the landslide. Default is 200 m.
-        max_length (float): maximum length of the landslide. Default is 2000 m.
-        initial_release_depth (float): depth of the initial release area. Default is 0.
-        #TODO: change to depth in the raster (as pixel value) instead.
-        mask (np.ndarray): mask of the area outside analysis. Must have the same shape and same transform as the DEM.
-                            Default is None.
-        verbose (bool): wheter to print progress. Default is False.
-        slope_chunk_size (int): chunk size for slope calculation (default 1000). Uses
-                                utils.compute_slope_chunked to keep memory and runtime in check while
-                                preserving baseline results.
+    Stop criteria are defined by maximum slope, minimum and maximum length.
+    Propagation is done iteratively from the release area outward in 3D.
+
+    Phase 1 (Unconditional): Expands release area up to min_length.
+    Phase 2 (Conditional BFS): Uses a front of candidate pixels, checking
+    slope criteria only for candidates rather than the full release area.
+
+    Args:
+        dem: DEM elevation array.
+        initial_release: Initial release area as a boolean array (same shape as DEM).
+        dem_transform: Affine transformation of the DEM/release.
+        min_slope: Minimum slope of the failure line. Default 1/15 per NVE guidelines.
+        min_height: Minimum height for slope criterion in meters.
+        min_length: Minimum propagation length in meters.
+        max_length: Maximum propagation length in meters.
+        initial_release_depth: Depth of the initial release area in meters.
+        mask: Binary mask for analysis area (same shape as DEM). None means no mask.
+        verbose: Whether to log progress.
+        slope_chunk_size: Chunk size for slope calculation to manage memory.
+
     Returns:
-        release (np.ndarray): propagated release area of the landslide as a boolean numpy array
+        Tuple of (release array, list of animation frames).
     """
     if verbose:
         logger.info("Running landslide propagation (Optimized BFS)...")
@@ -274,34 +264,39 @@ def landslide_retrogression(dem: np.ndarray,
 
 
 def run_retrogression_with_initial_landslide(
-        bounds: tuple,
-        rel_shape: list[BaseGeometry],
-        point_depth: float = 0.0,
-        clip_to_msml=False,
-        custom_msml: gpd.GeoDataFrame=None,
-        ini_slope: float = 1 / 4,
-        retro_slope: list = [1 / 15],
-        min_height: float = 5,
-        min_length: float = 75,
-        custom_raster=None,
-        return_animation=False,
+    bounds: tuple | None,
+    rel_shape: list[BaseGeometry],
+    point_depth: float = 0.0,
+    clip_to_msml: bool = False,
+    custom_msml: gpd.GeoDataFrame | None = None,
+    ini_slope: float = 1 / 4,
+    retro_slope: list[float] | float = 1 / 15,
+    min_height: float = 5,
+    min_length: float = 75,
+    custom_raster: str | None = None,
+    return_animation: bool = False,
+) -> gpd.GeoDataFrame | tuple[gpd.GeoDataFrame, list[np.ndarray]]:
+    """Run landslide retrogression with an initial landslide phase.
 
-):
-    """
-    Run landslide retrogression with an initial landslide.
+    First propagates using ini_slope (steeper, initial failure), then
+    continues with retro_slope (gentler, retrogressive phase).
 
     Args:
-        bounds (tuple): xmin, ymin, xmax, ymax
-        rel_shape (list): release area as a list of shapely's BaseGeometries
-        point_depth (float): depth of the source points (/line/polygon)
-        clip_to_msml (bool): wheter to clip against MSML (sammenhengede forekomster).
-        ini_slope (list): list with slope of the landslide's release area to compute.
-        retro_slope (float): retrogressive slope of the landslide.
-        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
-        min_length (float): minimum length of the landslide (slope not checked within this length). Default is 75 m.
-        custom_raster (np.ndarray): custom raster to use for the calculation. Default is None.
-        return_animation (bool): wheter to return the animation of the retrogression. Default is False.
+        bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
+        rel_shape: Release area as a list of shapely geometries.
+        point_depth: Depth of the source points/line/polygon in meters.
+        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        custom_msml: Custom MSML mask as GeoDataFrame.
+        ini_slope: Slope for the initial landslide phase.
+        retro_slope: Retrogressive slope(s) for second phase.
+        min_height: Minimum height for slope criterion in meters.
+        min_length: Minimum length before slope is checked in meters.
+        custom_raster: Path to custom raster file (tif) for calculations.
+        return_animation: Whether to return the animation frames.
 
+    Returns:
+        GeoDataFrame with propagated release area. If return_animation is True,
+        returns a tuple of (GeoDataFrame, list of animation frames).
     """
     if not isinstance(retro_slope, list):
         retro_slope = [retro_slope]
@@ -381,16 +376,15 @@ def run_retrogression_with_initial_landslide(
     return akt
 
 
-def apply_mask(array: np.ndarray, mask: np.ndarray) -> np.ndarray:
-    """
-    Apply a binary mask to a numpy array.
+def apply_mask(array: np.ndarray, mask: np.ndarray | None) -> np.ndarray:
+    """Apply a binary mask to a numpy array.
 
     Args:
-        array (np.ndarray): Input array.
-        mask (np.ndarray): Binary mask.
+        array: Input array.
+        mask: Binary mask array, or None to skip masking.
 
     Returns:
-        np.ndarray: Masked array.
+        Masked copy of the array (zeros where mask is 0).
     """
     if mask is None:
         return array
@@ -401,41 +395,34 @@ def apply_mask(array: np.ndarray, mask: np.ndarray) -> np.ndarray:
     return masked_array
 
 
-def landslide_retrogression_legacy(dem: np.ndarray,
-                            initial_release: np.ndarray,
-                            dem_transform: rasterio.transform.Affine,
-                            min_slope: float = 1 / 15,
-                            min_height: float = 5,
-                            min_length: float = 200,
-                            max_length: float = 2000,
-                            initial_release_depth: float = 0,
-                            mask: np.ndarray = None,
-                            verbose: bool = False):
-    """
-    Propagates a landslide from a release area in a DEM. Stop criteria is defined by the maximum slope, minimum and
-    maximum length of the landslide. The propagation is done iteratively, starting from the release area and moving
-    outwards. The propagation is done in 3D, i.e. the landslide can propagate in any direction.
+def landslide_retrogression_legacy(
+    dem: np.ndarray,
+    initial_release: np.ndarray,
+    dem_transform: rasterio.transform.Affine,
+    min_slope: float = 1 / 15,
+    min_height: float = 5,
+    min_length: float = 200,
+    max_length: float = 2000,
+    initial_release_depth: float = 0,
+    mask: np.ndarray | None = None,
+    verbose: bool = False,
+) -> tuple[np.ndarray, list[np.ndarray]]:
+    """Propagate a landslide from a release area (legacy non-BFS implementation).
 
-    Parameters:
-        dem (np.ndarray): DEM as a numpy array
-        initial_release (np.ndarray): initial release area as a boolean numpy array.
-                                      Must have the same shape and same transform as the DEM.
-        dem_transform (Affine): affine transformation of the DEM/release.
-        min_slope (float): minimum slope of the landslide. Default is 1/15 as in NVE's guidelines
-        min_height (float): minimum height for checking the slope criterion. Default is 5 m.
-        min_length (float): minimum length of the landslide. Default is 200 m.
-        max_length (float): maximum length of the landslide. Default is 2000 m.
-        initial_release_depth (float): depth of the initial release area. Default is 0.
-        #TODO: change to depth in the raster (as pixel value) instead.
-        mask (np.ndarray): mask of the area outside analysis. Must have the same shape and same transform as the DEM.
-                            Default is None.
-        verbose (bool): wheter to print progress. Default is False.
-
+    Args:
+        dem: DEM elevation array.
+        initial_release: Initial release area as a boolean array (same shape as DEM).
+        dem_transform: Affine transformation of the DEM/release.
+        min_slope: Minimum slope of the failure line. Default 1/15 per NVE guidelines.
+        min_height: Minimum height for slope criterion in meters.
+        min_length: Minimum propagation length in meters.
+        max_length: Maximum propagation length in meters.
+        initial_release_depth: Depth of the initial release area in meters.
+        mask: Binary mask for analysis area (same shape as DEM). None means no mask.
+        verbose: Whether to log progress.
 
     Returns:
-        release (np.ndarray): propagated release area of the landslide as a boolean numpy array
-
-
+        Tuple of (release array, list of animation frames).
     """
     if verbose:
         logger.info("Running landslide propagation (legacy)...")
@@ -509,17 +496,15 @@ def landslide_retrogression_legacy(dem: np.ndarray,
     return release, animation
 
 
-def create_buffer(image: np.ndarray, buffer_size: int = 1):
-    """
-    Create a buffer around an image by performing binary dilation.
+def create_buffer(image: np.ndarray, buffer_size: int = 1) -> np.ndarray:
+    """Create a buffer ring around a binary image via binary dilation.
 
     Args:
-        image (np.ndarray): Image as a numpy array.
-        buffer_size (int): Size of the buffer in pixels. Default is 1.
+        image: Binary image array.
+        buffer_size: Size of the buffer in pixels.
 
     Returns:
-        np.ndarray: Buffer as a boolean numpy array.
-
+        Buffer ring as a boolean array (dilated minus original).
     """
     dilated_image = binary_dilation(image, iterations=buffer_size)
     # buffer = ((dilated_image - image) > 0).astype(bool)
@@ -528,19 +513,18 @@ def create_buffer(image: np.ndarray, buffer_size: int = 1):
     return buffer
 
 
-def animate_landslide_retrogresion(animation: np.ndarray, dem: np.ndarray, frame_step: int = None) -> go.Figure:
-    """
-    Creates a plotly animation of the landslide retrogression.
+def animate_landslide_retrogresion(
+    animation: list[np.ndarray], dem: np.ndarray, frame_step: int | None = None
+) -> go.Figure:
+    """Create a plotly animation of the landslide retrogression.
 
     Args:
-
-        animation (list): list of numpy arrays with the landslide retrogression.
-        dem (np.ndarray): DEM as a numpy array.
-        frame_step (int): step between frames. Default is len(animation)//5 if len(animation)//5 > 1 else 2.
+        animation: List of numpy arrays with retrogression steps.
+        dem: DEM elevation array.
+        frame_step: Step between frames. Defaults to len(animation)//5.
 
     Returns:
-        fig (plotly.graph_objects.Figure): figure object with the animation.
-
+        Plotly Figure with the animation.
     """
     logger.info("Animating landslide retrogression")
 
@@ -586,17 +570,15 @@ def animate_landslide_retrogresion(animation: np.ndarray, dem: np.ndarray, frame
     return fig
 
 
-def hillshade_img(dem_array: np.ndarray, ve: int = 1) -> go.Image:
-    """
-    Create a plotly image object of a hillshade.
+def hillshade_img(dem_array: np.ndarray, ve: float = 1) -> go.Image:
+    """Create a plotly Image object of a hillshade.
 
     Args:
-        dem_array (np.ndarray): DEM as a numpy array.
-        ve (float): vertical exaggeration of the hillshade. Default is 1.
+        dem_array: DEM elevation array.
+        ve: Vertical exaggeration factor.
 
     Returns:
-        go.Image: plotly image object.
-
+        Plotly Image trace with hillshade rendering.
     """
     ls = LightSource(azdeg=315, altdeg=45)
     hilsh = ls.shade(dem_array, vert_exag=ve, blend_mode="hsv", cmap=plt.cm.gray, dx=5, dy=5)
@@ -604,26 +586,26 @@ def hillshade_img(dem_array: np.ndarray, ve: int = 1) -> go.Image:
     return go.Image(z=img)
 
 
-def plot_hillshade_overlay(dem: np.ndarray,
-                           overlay: np.ndarray,
-                           ve: int = 1,
-                           alpha: float = 0.4,
-                           res: float = 5,
-                           figsize: tuple = (10, 10)) -> plt.figure:
-    """
-    Plot a hillshade overlayed with a binary overlay
+def plot_hillshade_overlay(
+    dem: np.ndarray,
+    overlay: np.ndarray,
+    ve: float = 1,
+    alpha: float = 0.4,
+    res: float = 5,
+    figsize: tuple[float, float] = (10, 10),
+) -> plt.Figure:
+    """Plot a hillshade overlaid with a binary overlay.
 
     Args:
-        dem (np.ndarray): DEM as a numpy array
-        overlay (np.ndarray): overlay as a boolean numpy array.
-        ve (float): vertical exaggeration of the hillshade. Default is 1.
-        alpha (float): transparency of the overlay. Default is 0.4.
-        res (float): resolution of the DEM. Default is 5.
-        figsize (tuple): figure size. Default is (10,10).
+        dem: DEM elevation array.
+        overlay: Binary overlay array.
+        ve: Vertical exaggeration of the hillshade.
+        alpha: Transparency of the overlay.
+        res: Resolution of the DEM in meters.
+        figsize: Figure size as (width, height).
 
     Returns:
-        fig (matplotlib.figure.Figure): figure object
-
+        Matplotlib Figure object.
     """
     import matplotlib.colors as mcolors
     from matplotlib.colors import LightSource
@@ -645,18 +627,19 @@ def plot_hillshade_overlay(dem: np.ndarray,
     return fig
 
 
-def gen_animation(dem: np.ndarray, animation: list, skip_frames: int = 10, filename: str = None) -> list:
-    """
-    Generate a GIF animation from a list of matplotlib figures
+def gen_animation(
+    dem: np.ndarray, animation: list[np.ndarray], skip_frames: int = 10, filename: str | None = None
+) -> list:
+    """Generate a GIF animation from retrogression frames.
 
     Args:
-        dem (np.ndarray): DEM as a numpy array
-        animation (list): list of numpy arrays
-        skip_frames (int): number of frames to skip. Default is 10.
-        filename (str): output filename. Default is None.
+        dem: DEM elevation array.
+        animation: List of numpy arrays with retrogression steps.
+        skip_frames: Number of frames to skip between captures.
+        filename: Output GIF filename. None to skip saving.
 
     Returns:
-        frames (list): list of PIL images
+        List of PIL Image frames.
     """
     fig_list = [plot_hillshade_overlay(dem, ani) for ani in animation[::skip_frames]]
     frames = []
@@ -676,20 +659,14 @@ def gen_animation(dem: np.ndarray, animation: list, skip_frames: int = 10, filen
     return frames
 
 
-def save_frames(dem_array: np.ndarray, animation: list, out_dir: str, skip_frames: int = 10):
-    """
-    Save the frames of an animation as png images. Use with https://ezgif.com/ to generate the gif file.
+def save_frames(dem_array: np.ndarray, animation: list[np.ndarray], out_dir: str, skip_frames: int = 10) -> None:
+    """Save retrogression animation frames as PNG images.
 
     Args:
-        dem_array (np.ndarray): DEM as a numpy array
-        animation (list): list of numpy arrays
-        out_dir (str): output directory
-        skip_frames (int): number of frames to skip. Default is 10.
-
-    Returns:
-        None
-
-
+        dem_array: DEM elevation array.
+        animation: List of numpy arrays with retrogression steps.
+        out_dir: Output directory for frame images.
+        skip_frames: Number of frames to skip between saves.
     """
     current_backend = plt.get_backend()
     plt.switch_backend('Agg')
