@@ -42,3 +42,6 @@ notebooks_test/
 
 # AI assistant instructions (WIP)
 .github/copilot-instructions.md
+
+# Zensical build output
+site/
