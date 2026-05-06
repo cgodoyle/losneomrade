@@ -27,7 +27,7 @@ def run_retrogression(
     bounds: tuple | None,
     rel_shape: gpd.GeoDataFrame,
     point_depth: float = 0.0,
-    clip_to_msml: bool = False,
+    mask: gpd.GeoDataFrame | None = None,
     min_slope: float = 1 / 15,
     min_height: float = 5,
     min_length: float = 75,
@@ -41,7 +41,7 @@ def run_retrogression(
         bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
         rel_shape: Release area as a GeoDataFrame (any geometry type).
         point_depth: Depth of the source points/line/polygon in meters.
-        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
         min_slope: Minimum slope of the failure line. Default 1/15 per NVE guidelines.
         min_height: Minimum height for slope criterion in meters.
         min_length: Minimum length before slope is checked in meters.
@@ -61,9 +61,8 @@ def run_retrogression(
     dem_array = dem_data["full_array"]
     dem_profile = dem_data["profile"]
 
-    if clip_to_msml:
-        mask_gpd = utils.get_msml_mask((bounds[0], bounds[2], bounds[1], bounds[3]))
-        mask_msml = utils.rasterize_shape(mask_gpd, dem_profile)
+    if mask is not None:
+        mask_msml = utils.rasterize_shape(mask, dem_profile)
     else:
         mask_msml = None
 
@@ -267,8 +266,7 @@ def run_retrogression_with_initial_landslide(
     bounds: tuple | None,
     rel_shape: list[BaseGeometry],
     point_depth: float = 0.0,
-    clip_to_msml: bool = False,
-    custom_msml: gpd.GeoDataFrame | None = None,
+    mask: gpd.GeoDataFrame | None = None,
     ini_slope: float = 1 / 4,
     retro_slope: list[float] | float = 1 / 15,
     min_height: float = 5,
@@ -285,8 +283,7 @@ def run_retrogression_with_initial_landslide(
         bounds: Bounding box as (xmin, xmax, ymin, ymax). None if custom_raster is used.
         rel_shape: Release area as a list of shapely geometries.
         point_depth: Depth of the source points/line/polygon in meters.
-        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
-        custom_msml: Custom MSML mask as GeoDataFrame.
+        mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
         ini_slope: Slope for the initial landslide phase.
         retro_slope: Retrogressive slope(s) for second phase.
         min_height: Minimum height for slope criterion in meters.
@@ -309,15 +306,10 @@ def run_retrogression_with_initial_landslide(
     dem_array = dem_data["full_array"]
     dem_profile = dem_data["profile"]
 
-    if clip_to_msml:
-        mask_gpd = utils.get_msml_mask((bounds[0], bounds[2], bounds[1], bounds[3]))
-        mask_msml = utils.rasterize_shape(mask_gpd, dem_profile)
-
+    if mask is not None:
+        mask_msml = utils.rasterize_shape(mask, dem_profile)
     else:
-        if custom_msml is not None:
-            mask_msml = utils.rasterize_shape(custom_msml, dem_profile)
-        else:
-            mask_msml = None
+        mask_msml = None
 
     rel = utils.rasterize_shape(rel_shape, dem_profile)
 

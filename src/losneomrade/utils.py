@@ -5,17 +5,16 @@ import warnings
 
 import geopandas as gpd
 import numpy as np
-import pandas as pd
 import rasterio
-import requests
 from rasterio.features import rasterize, shapes
 from scipy.spatial import distance_matrix
-from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPoint, Point, box
+from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPoint, Point
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, split
 
 from .config import settings
 from .hoydedata import get_hoydedata  # noqa: F401
+from .types import DataFrameLike
 
 warnings.simplefilter(action="ignore", category=UserWarning)
 warnings.simplefilter(action="ignore", category=FutureWarning)
@@ -139,7 +138,6 @@ def set_z_from_raster(points_xy: np.ndarray, window_data: dict) -> np.ndarray:
     return np.c_[points_filt[:, :2], z][~filter_nan]
 
 
-
 def generate_plotly_profile(
     prof: np.ndarray, max_depth: float | None = None, kp_depth: float = 0, limit: float = 15
 ) -> object:
@@ -205,7 +203,9 @@ def generate_plotly_profile(
     return fig
 
 
-def generate_terraincriteria_line(prof: np.ndarray, limit: float = 15, depth: float = 0) -> tuple[np.ndarray, np.ndarray]:
+def generate_terraincriteria_line(
+    prof: np.ndarray, limit: float = 15, depth: float = 0
+) -> tuple[np.ndarray, np.ndarray]:
     """Generate a terrain criteria line for a profile.
 
     Args:
@@ -297,196 +297,9 @@ def rasterize_shape(
     return rasterized
 
 
-def get_msml_mask(bounds: tuple[float, float, float, float], results_offset: int = 100) -> gpd.GeoDataFrame:
-    """Get the MSML mask for the given bounds.
-
-    Args:
-        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
-        results_offset: Number of results to offset in each request.
-
-    Returns:
-        GeoDataFrame with the combined MSML mask.
-    """
-
-    mask_msml = get_maringrense(bounds, "msml", results_offset)
-    mask_aumg = get_maringrense(bounds, "area_under_mg", results_offset)
-    if mask_msml.empty and mask_aumg.empty:
-        return gpd.GeoDataFrame(geometry=[])
-    mask_gpd = gpd.GeoDataFrame(pd.concat([mask_msml, mask_aumg], ignore_index=True))
-    return gpd.clip(mask_gpd, bounds).dissolve()
-
-
-def get_maringrense(
-    bounds: tuple[float, float, float, float], layer: str, results_offset: int = 100
-) -> gpd.GeoDataFrame:
-    """Retrieve MarinGrense data within the specified bounds.
-
-    Args:
-        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
-        layer: Layer name to query. Valid options are ``"msml"`` and ``"area_under_mg"``.
-        results_offset: Number of results to offset in each request.
-
-    Returns:
-        GeoDataFrame containing the MarinGrense data.
-    """
-
-    xmin, ymin, xmax, ymax = bounds
-
-    layer_dict = {"msml": 7, "area_under_mg": 8}
-    layer_nr = layer_dict[layer]
-
-    url = f"https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/{layer_nr}/query"
-
-    params = {
-        "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
-        "geometryType": "esriGeometryEnvelope",
-        "f": "geojson",
-    }
-
-    response = requests.get(url, params=params)
-    data = response.json()
-    features = data.get("features", [])
-
-    while data.get("exceededTransferLimit"):
-        params["resultOffset"] = params.get("resultOffset", 0) + results_offset
-        response = requests.get(url, params=params)
-        data = response.json()
-        features.extend(data.get("features", []))
-    if len(features) == 0:
-        return gpd.GeoDataFrame(geometry=[])
-    return gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
-
-
-def check_maringrense() -> bool:
-    """Check whether the MarinGrense service responds successfully.
-
-    Args:
-        None.
-
-    Returns:
-        ``True`` if the service returns valid data, otherwise ``False``.
-    """
-    xmin, ymin, xmax, ymax = 265122.0, 6648110.0, 266151.0, 6648761.0
-    layer_dict = {"msml": 7, "area_under_mg": 8}
-
-    params = {
-        "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
-        "geometryType": "esriGeometryEnvelope",
-        "f": "geojson",
-    }
-
-    for layer in ["msml", "area_under_mg"]:
-        layer_nr = layer_dict[layer]
-
-        url = f"https://gis3.nve.no/map/rest/services/Mapservices/MarinGrense/MapServer/{layer_nr}/query"
-
-        try:
-            response = requests.get(url, params=params)
-            data = response.json()
-        except requests.JSONDecodeError:
-            return False
-        if data.get("error") is not None:
-            return False
-        else:
-            return True
-
-
-def get_ar5_mask(bounds: tuple[float, float, float, float], results_offset: int = 100) -> gpd.GeoDataFrame:
-    """Retrieve AR5 mask data within the specified bounds.
-
-    Args:
-        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
-        results_offset: Number of results to offset in each request.
-
-    Returns:
-        GeoDataFrame containing AR5 features for ``grunnlendt`` and ``fjell i dagen``.
-    """
-
-    xmin, ymin, xmax, ymax = bounds
-
-    url = "https://gis3.nve.no/map/rest/services/Mapservices/FKB/MapServer/2/query"
-
-    params = {
-        "geometry": f"xmin:{xmin},ymin:{ymin},xmax:{xmax},ymax:{ymax}",
-        "geometryType": "esriGeometryEnvelope",
-        "outFields": "grunnforhold",
-        "f": "geojson",
-    }
-
-    response = requests.get(url, params=params)
-    data = response.json()
-    features = data.get("features", [])
-
-    while data.get("exceededTransferLimit"):
-        params["resultOffset"] = params.get("resultOffset", 0) + results_offset
-        response = requests.get(url, params=params)
-        data = response.json()
-        features.extend(data.get("features", []))
-    if len(features) == 0:
-        return gpd.GeoDataFrame(geometry=[])
-    gdf = gpd.GeoDataFrame.from_features(features).set_crs(4326).to_crs(25833)
-    gdf = gdf.query("grunnforhold in (42, 43)").copy()
-    # 42: fjell i dagen, 43: grunnlendt (https://register.geonorge.no/sosi-kodelister/fkb/ar5/5.0/arealressursgrunnforhold)
-    gdf = gdf.clip(bounds)
-
-    return gdf
-
-
-def get_clipping_mask(
-    bounds: tuple[float, float, float, float], msml: bool = True, ar5: bool = True
-) -> gpd.GeoDataFrame | None:
-    """Get a combined clipping mask for the given bounds.
-
-    Args:
-        bounds: Bounding box coordinates as ``(xmin, ymin, xmax, ymax)``.
-        msml: Whether to include the MSML mask.
-        ar5: Whether to subtract the AR5 mask.
-
-    Returns:
-        Combined clipping mask, or ``None`` when no masks are requested.
-    """
-    if not msml and not ar5:
-        return None
-    mask_msml = get_msml_mask(bounds) if msml else None
-    if not ar5:
-        return mask_msml
-    mask_ar5 = get_ar5_mask(bounds) if ar5 else None
-
-    base_mask = mask_msml if mask_msml is not None else gpd.GeoDataFrame(geometry=[box(*bounds)], crs=25833)
-    try:
-        mask = base_mask.overlay(mask_ar5, how="difference")
-    except Exception as e:
-        logger.error(f"Overlay failed: {e} (ar5={len(mask_ar5)}, base={len(base_mask)})")
-        raise
-    return mask
-
-
-def modify_release_mask(
-    release_mask: gpd.GeoDataFrame,
-    no_release_mask: gpd.GeoDataFrame | None = None,
-    sup_release_mask: gpd.GeoDataFrame | None = None,
-) -> gpd.GeoDataFrame:
-    """Modify a release mask with exclusion and supplementary areas.
-
-    Args:
-        release_mask: Release mask as a GeoDataFrame.
-        no_release_mask: Areas to remove from the release mask.
-        sup_release_mask: Areas to add to the release mask.
-
-    Returns:
-        Modified release mask.
-    """
-
-    if no_release_mask is not None:
-        release_mask = gpd.GeoDataFrame(
-            geometry=release_mask.dissolve().difference(no_release_mask.dissolve()), crs=release_mask.crs
-        )
-
-    if sup_release_mask is not None:
-        release_mask = gpd.GeoDataFrame(
-            geometry=release_mask.dissolve().union(sup_release_mask.dissolve()), crs=release_mask.crs
-        )
-    return release_mask
+# Backward-compat re-exports from masks module
+from losneomrade.masks import get_msml_mask as get_msml_mask  # noqa: E402
+from losneomrade.masks import modify_release_mask as modify_release_mask  # noqa: E402
 
 
 def generate_windows(custom_raster: str) -> dict:
@@ -913,7 +726,7 @@ def create_one_sided_sections_along_line(
     return perpendiculars
 
 
-def generate_points_along_lines(gdf: gpd.GeoDataFrame, max_distance: float) -> gpd.GeoDataFrame:
+def generate_points_along_lines(gdf: gpd.GeoDataFrame, max_distance: float) -> DataFrameLike:
     """Generate points at regular intervals along line geometries.
 
     Args:
@@ -996,7 +809,7 @@ def extract_elevation_values_for_points(
 
 def create_terrain_profile(
     line: BaseGeometry | gpd.GeoDataFrame, dem_array: np.ndarray, profile: dict, resolution: float = 5.0
-) -> tuple[list[float], np.ndarray]:
+) -> tuple[list, np.ndarray]:
     """Create a terrain profile along a line from a DEM.
 
     Args:

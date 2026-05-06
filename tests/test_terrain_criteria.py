@@ -9,9 +9,8 @@ import tempfile
 import geopandas as gpd
 import numpy as np
 import pytest
-import rasterio
 
-from losneomrade import terrain_criteria, utils
+from losneomrade import terrain_criteria
 
 
 class TestTerrainCriteriaOffline:
@@ -21,14 +20,13 @@ class TestTerrainCriteriaOffline:
         """Terrain criteria runs and returns GeoDataFrame when source is a LineString."""
         from shapely.geometry import LineString
 
-        line = LineString([(2e5 + 50, 6e6 - 1100), (2e5 + 200, 6e6 - 1200)])
+        line = LineString([(2e5 + 50, 6e6 - 100), (2e5 + 100, 6e6 - 150)])
         source = gpd.GeoDataFrame(geometry=[line], crs=25833)
 
         result = terrain_criteria.run_terrain_criteria(
             bounds=None,
             source=source,
             source_depth=0.5,
-            clip_to_msml=False,
             h_min=0,
             custom_raster=fake_slope_1_5["path"],
         )
@@ -40,13 +38,12 @@ class TestTerrainCriteriaOffline:
 
     def test_run_terrain_criteria_with_numpy_source(self, fake_slope_1_5):
         """Terrain criteria runs with numpy array source points."""
-        points = np.array([[2e5 + 100, 6e6 - 1150]])
+        points = np.array([[2e5 + 80, 6e6 - 140]])
 
         result = terrain_criteria.run_terrain_criteria(
             bounds=None,
             source=points,
             source_depth=0.5,
-            clip_to_msml=False,
             h_min=0,
             custom_raster=fake_slope_1_5["path"],
         )
@@ -58,13 +55,12 @@ class TestTerrainCriteriaOffline:
         """Terrain criteria runs with Point geometry source."""
         from shapely.geometry import Point
 
-        source = gpd.GeoDataFrame(geometry=[Point(2e5 + 100, 6e6 - 1150)], crs=25833)
+        source = gpd.GeoDataFrame(geometry=[Point(2e5 + 80, 6e6 - 140)], crs=25833)
 
         result = terrain_criteria.run_terrain_criteria(
             bounds=None,
             source=source,
             source_depth=0.5,
-            clip_to_msml=False,
             h_min=0,
             custom_raster=fake_slope_1_5["path"],
         )
@@ -74,7 +70,7 @@ class TestTerrainCriteriaOffline:
 
     def test_terrain_criteria_produces_expected_slope_classes(self, fake_slope_1_5):
         """Terrain criteria produces reasonable slope classes for a 1:5 slope."""
-        points = np.array([[2e5 + 100, 6e6 - 1150]])
+        points = np.array([[2e5 + 80, 6e6 - 140]])
 
         with tempfile.TemporaryDirectory() as tempdir:
             result = terrain_criteria.terrain_criteria(
@@ -82,8 +78,7 @@ class TestTerrainCriteriaOffline:
                 points=points,
                 point_depth=0.5,
                 out_filename=f"{tempdir}/tc",
-                clip_to_msml=False,
-                h_min=0,
+                    h_min=0,
                 custom_raster=fake_slope_1_5["path"],
             )
 
@@ -93,7 +88,7 @@ class TestTerrainCriteriaOffline:
 
     def test_terrain_criteria_reclass_disabled(self, fake_slope_1_5):
         """When reclassify_results=False, returns continuous slope values in the raster."""
-        points = np.array([[2e5 + 100, 6e6 - 1150]])
+        points = np.array([[2e5 + 80, 6e6 - 140]])
 
         with tempfile.TemporaryDirectory() as tempdir:
             result = terrain_criteria.terrain_criteria(
@@ -101,8 +96,7 @@ class TestTerrainCriteriaOffline:
                 points=points,
                 point_depth=0.5,
                 out_filename=f"{tempdir}/tc",
-                clip_to_msml=False,
-                h_min=0,
+                    h_min=0,
                 reclassify_results=False,
                 custom_raster=fake_slope_1_5["path"],
             )
@@ -149,7 +143,6 @@ class TestTerrainCriteriaNetwork:
             bounds=alna_bounds,
             source=alna_source_line,
             source_depth=0.5,
-            clip_to_msml=True,
             h_min=0,
         )
 

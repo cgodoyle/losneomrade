@@ -20,7 +20,7 @@ def run_terrain_criteria(
     bounds: tuple | None,
     source: gpd.GeoDataFrame | np.ndarray,
     source_depth: float = 0.0,
-    clip_to_msml: bool = False,
+    mask: gpd.GeoDataFrame | None = None,
     h_min: float = 5,
     reclassify_results: bool = True,
     classes: list[float] | None = None,
@@ -33,7 +33,7 @@ def run_terrain_criteria(
         source: GeoDataFrame with source points (LineStrings or Points),
             or a numpy array with source point coordinates.
         source_depth: Depth of the source points in meters.
-        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
         h_min: Minimum height difference for calculations in meters.
         reclassify_results: Whether to return classified result or continuous slope value.
         classes: Slope values defining class boundaries for reclassification.
@@ -58,7 +58,7 @@ def run_terrain_criteria(
             points=source_points,
             point_depth=source_depth,
             out_filename=tempdir+'/tc',
-            clip_to_msml=clip_to_msml,
+            mask=mask,
             h_min=h_min,
             reclassify_results=reclassify_results,
             classes=classes,
@@ -102,7 +102,7 @@ def terrain_criteria(
     points: np.ndarray,
     out_filename: str,
     point_depth: float = 0.0,
-    clip_to_msml: bool = False,
+    mask: gpd.GeoDataFrame | None = None,
     h_min: float = 5,
     reclassify_results: bool = True,
     classes: list[float] | None = None,
@@ -115,7 +115,7 @@ def terrain_criteria(
         points: Array with the source points (x, y, z).
         out_filename: Path to save results (without extension).
         point_depth: Depth of the source points in meters.
-        clip_to_msml: Whether to clip against MSML (sammenhengede forekomster).
+        mask: Optional clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
         h_min: Minimum height difference for calculations in meters.
         reclassify_results: Whether to return classified result or continuous slope value.
         classes: Slope values defining class boundaries for reclassification.
@@ -160,8 +160,8 @@ def terrain_criteria(
 
     gpd_polygonized_raster = polygonize_terrain_criteria(result_raster, raster_transform)
 
-    if clip_to_msml:
-        gpd_polygonized_raster = clip_results_to_msml(gpd_polygonized_raster, bounds)
+    if mask is not None:
+        gpd_polygonized_raster = clip_results_to_mask(gpd_polygonized_raster, mask)
 
     return gpd_polygonized_raster
 
@@ -224,25 +224,17 @@ def reclass(matrix: np.ndarray, classes: list[float] | None = None) -> np.ndarra
     return reclass_vectorized(matrix)
 
 
-def clip_results_to_msml(results_gpd: gpd.GeoDataFrame, bounds: tuple) -> gpd.GeoDataFrame:
-    """Clip results to NGU's MSML layer from NVE's MapServer.
+def clip_results_to_mask(results_gpd: gpd.GeoDataFrame, mask: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Clip terrain criteria results to a mask GeoDataFrame.
 
     Args:
         results_gpd: GeoDataFrame with the terrain criteria results.
-        bounds: Bounds of the calculation area as (xmin, xmax, ymin, ymax).
+        mask: Clipping mask as GeoDataFrame (e.g. from masks.get_msml_mask).
 
     Returns:
         Clipped results as GeoDataFrame.
     """
-    xmin, xmax, ymin, ymax = bounds
-
-    # concatenate masks
-    mask = utils.get_msml_mask(bounds=(xmin, ymin, xmax, ymax))
-
-    # clip results
-    results_gpd = gpd.clip(results_gpd, mask)
-
-    return results_gpd
+    return gpd.clip(results_gpd, mask)
 
 
 def polygonize_terrain_criteria(

@@ -4,7 +4,6 @@ Offline tests use fake slopes to verify the retrogression pipeline
 produces correct results without hitting external APIs.
 """
 
-import tempfile
 
 import geopandas as gpd
 import numpy as np
@@ -12,7 +11,7 @@ import pytest
 import rasterio
 from shapely.geometry import LineString, Point
 
-from losneomrade import retrogression, utils
+from losneomrade import retrogression
 
 
 class TestRetrogressionOffline:
@@ -20,16 +19,15 @@ class TestRetrogressionOffline:
 
     def test_run_retrogression_basic(self, fake_slope_1_5):
         """Basic retrogression from a point source on a 1:5 slope."""
-        source = gpd.GeoDataFrame(geometry=[Point(2e5 + 100, 6e6 - 1150, 100)], crs=25833)
+        source = gpd.GeoDataFrame(geometry=[Point(2e5 + 80, 6e6 - 140, 100)], crs=25833)
 
         result = retrogression.run_retrogression(
             bounds=None,
             rel_shape=source,
             point_depth=0.5,
-            clip_to_msml=False,
             custom_raster=fake_slope_1_5["path"],
             min_slope=1 / 5,
-            min_length=75,
+            min_length=20,
             min_height=0,
         )
 
@@ -39,16 +37,15 @@ class TestRetrogressionOffline:
 
     def test_run_retrogression_with_animation(self, fake_slope_1_5):
         """Retrogression returns animation when requested."""
-        source = gpd.GeoDataFrame(geometry=[Point(2e5 + 100, 6e6 - 1150, 100)], crs=25833)
+        source = gpd.GeoDataFrame(geometry=[Point(2e5 + 80, 6e6 - 140, 100)], crs=25833)
 
         result = retrogression.run_retrogression(
             bounds=None,
             rel_shape=source,
             point_depth=0.5,
-            clip_to_msml=False,
             custom_raster=fake_slope_1_5["path"],
             min_slope=1 / 5,
-            min_length=75,
+            min_length=20,
             min_height=0,
             return_animation=True,
         )
@@ -109,19 +106,17 @@ class TestRetrogressionOffline:
 
     def test_run_retrogression_with_initial_landslide(self, fake_slope_1_5):
         """Two-phase retrogression (initial + retro) runs successfully."""
-        from shapely.geometry import LineString
 
-        line = LineString([(2e5 + 50, 6e6 - 1100), (2e5 + 200, 6e6 - 1200)])
+        line = LineString([(2e5 + 50, 6e6 - 100), (2e5 + 100, 6e6 - 150)])
         source = [line]
 
         result = retrogression.run_retrogression_with_initial_landslide(
             bounds=None,
             rel_shape=source,
             point_depth=0.5,
-            clip_to_msml=False,
             ini_slope=1 / 4,
             retro_slope=[1 / 15],
-            min_length=20,
+            min_length=10,
             min_height=0,
             custom_raster=fake_slope_1_5["path"],
         )
@@ -166,7 +161,6 @@ class TestRetrogressionNetwork:
             bounds=alna_bounds,
             rel_shape=alna_source_line,
             point_depth=0.5,
-            clip_to_msml=True,
             min_slope=1 / 15,
             min_length=75,
             min_height=0,

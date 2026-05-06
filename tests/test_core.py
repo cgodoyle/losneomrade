@@ -4,16 +4,15 @@ Tests the functions most likely to break from code changes:
 slope computation, rasterize/polygonize, config, and fake slope generation.
 """
 
-import tempfile
 
 import geopandas as gpd
 import numpy as np
 import pytest
 import rasterio
-from shapely.geometry import LineString, Point, box
+from shapely.geometry import box
 
 from losneomrade import utils
-from losneomrade.config import HoydedataConfig, Settings, settings
+from losneomrade.config import HoydedataConfig, settings
 from losneomrade.hoydedata import get_hoydedata
 
 

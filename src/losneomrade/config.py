@@ -25,19 +25,18 @@ class HoydedataConfig:
 
 
 @dataclass
-class NVEConfig:
-    """Configuration for NVE/NGU WFS services.
+class MSMLConfig:
+    """Configuration for the MSML (marin leire) MapServer service.
 
     Attributes:
-        maringrense_url: URL for the marine limit WFS service.
-        results_offset: Default offset for paginated results.
+        base_url: Base URL for the NVE MSML MapServer (2025 recipe).
+        layer_id: Layer ID for the MSML feature layer.
+        max_records: Maximum records per paginated request.
     """
 
-    maringrense_url: str = (
-        "https://geo.ngu.no/mapserver/LosacGmlWMS3?"
-        "service=WFS&version=2.0.0&request=GetFeature"
-    )
-    results_offset: int = 100
+    base_url: str = "https://gis4.nve.no/map/rest/services/Mapservices/MSML/MapServer"
+    layer_id: int = 0
+    max_records: int = 2000
 
 
 @dataclass
@@ -46,12 +45,12 @@ class Settings:
 
     Attributes:
         hoydedata: Configuration for Høydedata API.
-        nve: Configuration for NVE services.
+        msml: Configuration for MSML/mask services.
         valid_layers: List of valid Høydedata layer names.
     """
 
     hoydedata: HoydedataConfig = field(default_factory=HoydedataConfig)
-    nve: NVEConfig = field(default_factory=NVEConfig)
+    msml: MSMLConfig = field(default_factory=MSMLConfig)
     valid_layers: tuple[str, ...] = (
         "dtm1_32_wcs",
         "dtm1_33_wcs",

@@ -6,7 +6,7 @@ import geopandas as gpd
 import numpy as np
 import pytest
 import rasterio
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString
 
 from losneomrade import utils
 
@@ -18,7 +18,7 @@ def fake_slope_1_5():
     Returns a dict with dem array, profile, and temp raster path.
     """
     with tempfile.TemporaryDirectory() as tempdir:
-        dem, profile = utils.generate_fake_slope(100, 100, 2000, 150, 1 / 5, 2e5, 6e6)
+        dem, profile = utils.generate_fake_slope(30, 100, 100, 130, 1 / 5, 2e5, 6e6)
         raster_path = f"{tempdir}/fake_slope_1_5.tif"
         with rasterio.open(raster_path, "w", **profile) as src:
             src.write(dem, 1)
@@ -32,7 +32,7 @@ def fake_slope_1_15():
     Returns a dict with dem array, profile, and temp raster path.
     """
     with tempfile.TemporaryDirectory() as tempdir:
-        dem, profile = utils.generate_fake_slope(100, 100, 2000, 150, 1 / 15, 2e5, 6e6)
+        dem, profile = utils.generate_fake_slope(30, 100, 100, 130, 1 / 15, 2e5, 6e6)
         raster_path = f"{tempdir}/fake_slope_1_15.tif"
         with rasterio.open(raster_path, "w", **profile) as src:
             src.write(dem, 1)
