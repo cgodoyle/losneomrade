@@ -8,6 +8,12 @@ cd losneomrade
 pip install -e ".[dev]"
 ```
 
+Optional with `uv`:
+
+```bash
+uv pip install -e ".[dev]"
+```
+
 ## Running tests
 
 ```bash
@@ -59,8 +65,39 @@ src/losneomrade/
 
 ## Commit messages
 
-- Concise, imperative mood, one line when possible
-- Breaking changes should be noted in the commit body
+Use **Conventional Commits** from this release line onward:
+
+- `feat:` for user-facing features
+- `fix:` for bug fixes
+- `docs:` for documentation-only changes
+- `refactor:` for internal code restructuring without behavior change
+- `test:` for test-only changes
+- `ci:` for workflow/automation changes
+- `chore:` for maintenance tasks
+
+Mark breaking changes with either:
+
+- `feat!: ...`
+- or a `BREAKING CHANGE:` footer in the commit body
+
+Examples:
+
+```text
+feat: add release workflow for version tags
+fix: preserve mask clipping in retrogression output
+feat!: normalize bounds to standard GIS order
+```
+
+## Versioning
+
+This project now follows **Semantic Versioning**:
+
+- **patch** for backwards-compatible fixes
+- **minor** for backwards-compatible features
+- **major** for breaking API changes
+
+The pre-modernization baseline is **`v1.1.3`**. The current breaking-change
+upgrade line is intended to become **`v2.0.0`**.
 
 ## Architecture decisions
 
