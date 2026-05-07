@@ -1,19 +1,14 @@
-import io
+from __future__ import annotations
+
 import logging
-import os
 import warnings
+from typing import Any
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import plotly.graph_objects as go
 import rasterio
-from matplotlib import pyplot as plt
-from matplotlib.colors import LightSource
-from PIL import Image
-from scipy.ndimage import binary_dilation
 from shapely.geometry.base import BaseGeometry
-from tqdm.notebook import tqdm
 
 from . import utils
 
@@ -21,6 +16,14 @@ warnings.simplefilter(action="ignore", category=UserWarning)
 warnings.simplefilter(action="ignore", category=FutureWarning)
 
 logger = logging.getLogger(__name__)
+
+
+def _get_tqdm() -> Any:
+    """Import tqdm lazily so worker processes avoid the UI stack at import time."""
+
+    from tqdm.auto import tqdm
+
+    return tqdm
 
 
 def run_retrogression(
@@ -180,6 +183,8 @@ def landslide_retrogression(
     candidates_mask = candidates_mask & (~checked)
 
     n_iter = min_iter
+
+    tqdm = _get_tqdm()
 
     with tqdm(total=max_iter, initial=n_iter, desc="iterations", disable=not verbose) as pbar:
         while n_iter < max_iter:
@@ -450,6 +455,8 @@ def landslide_retrogression_legacy(
 
     initial_release_buffered = apply_mask(initial_release + create_buffer(initial_release, min_iter), mask)
 
+    tqdm = _get_tqdm()
+
     with tqdm(total=0, desc="iterations", disable=not verbose) as pbar:
         while n_iter < max_iter:
             buffered = apply_mask(create_buffer(release, 1), mask)
@@ -505,6 +512,8 @@ def create_buffer(image: np.ndarray, buffer_size: int = 1) -> np.ndarray:
     Returns:
         Buffer ring as a boolean array (dilated minus original).
     """
+    from scipy.ndimage import binary_dilation
+
     dilated_image = binary_dilation(image, iterations=buffer_size)
     # buffer = ((dilated_image - image) > 0).astype(bool)
     buffer = dilated_image & (~image.astype(bool))
@@ -516,78 +525,20 @@ def animate_landslide_retrogresion(
     animation: list[np.ndarray],
     dem: np.ndarray,
     frame_step: int | None = None,
-) -> go.Figure:
-    """Create a plotly animation of the landslide retrogression.
+) -> object:
+    """Create a plotly animation of the landslide retrogression."""
 
-    Args:
-        animation: List of numpy arrays with retrogression steps.
-        dem: DEM elevation array.
-        frame_step: Step between frames. Defaults to len(animation)//5.
+    from .retrogression_visualization import animate_landslide_retrogresion as _animate_landslide_retrogresion
 
-    Returns:
-        Plotly Figure with the animation.
-    """
-    logger.info("Animating landslide retrogression")
-
-    if frame_step is None:
-        frame_step = len(animation) // 5 if len(animation) // 5 > 1 else 2
-
-    color_red = "rgba(255, 0, 0, 0.5)"
-    color_white = "rgba(255, 255, 255, 0.0)"
-    basemap = hillshade_img(dem, 1)
-    fig_data = [basemap, go.Heatmap(z=animation[0], colorscale=[[0, color_white], [1, color_red]], showscale=False)]
-    fig = go.Figure(
-        data=fig_data,
-        layout=go.Layout(
-            title="Step 0",
-            updatemenus=[dict(type="buttons", buttons=[dict(label="Play", method="animate", args=[None])])],
-        ),
-    )
-
-    frames = [
-        go.Frame(
-            data=[basemap, go.Heatmap(z=animation[i], colorscale=[[0, color_white], [1, color_red]], showscale=False)],
-            layout=go.Layout(title_text=f"Step {i}"),
-        )
-        for i in range(1, len(animation), frame_step)
-    ]
-    frames.append(
-        go.Frame(
-            data=[basemap, go.Heatmap(z=animation[-1], colorscale=[[0, color_white], [1, color_red]], showscale=False)],
-            layout=go.Layout(title_text=f"Step {len(animation)}"),
-        )
-    )
-    fig.frames = frames
-
-    height, width = dem.shape
-
-    fig.update_xaxes(scaleanchor="y")
-    fig.update_yaxes(scaleratio=1, autorange="reversed")
-    fig.update_layout(xaxis_range=[0, width], yaxis_range=[0, height])
-    fig.update_layout(
-        width=500,
-        height=500,
-        coloraxis_showscale=False,
-        plot_bgcolor=color_white,
-    )
-
-    return fig
+    return _animate_landslide_retrogresion(animation=animation, dem=dem, frame_step=frame_step)
 
 
-def hillshade_img(dem_array: np.ndarray, ve: float = 1) -> go.Image:
-    """Create a plotly Image object of a hillshade.
+def hillshade_img(dem_array: np.ndarray, ve: float = 1) -> object:
+    """Create a plotly Image object of a hillshade."""
 
-    Args:
-        dem_array: DEM elevation array.
-        ve: Vertical exaggeration factor.
+    from .retrogression_visualization import hillshade_img as _hillshade_img
 
-    Returns:
-        Plotly Image trace with hillshade rendering.
-    """
-    ls = LightSource(azdeg=315, altdeg=45)
-    hilsh = ls.shade(dem_array, vert_exag=ve, blend_mode="hsv", cmap=plt.get_cmap("gray"), dx=5, dy=5)
-    img = np.array((255 * hilsh[:, :, :3] + 0.5), int)
-    return go.Image(z=img)
+    return _hillshade_img(dem_array=dem_array, ve=ve)
 
 
 def plot_hillshade_overlay(
@@ -597,39 +548,19 @@ def plot_hillshade_overlay(
     alpha: float = 0.4,
     res: float = 5,
     figsize: tuple[float, float] = (10, 10),
-) -> plt.Figure:
-    """Plot a hillshade overlaid with a binary overlay.
+) -> Any:
+    """Plot a hillshade overlaid with a binary overlay."""
 
-    Args:
-        dem: DEM elevation array.
-        overlay: Binary overlay array.
-        ve: Vertical exaggeration of the hillshade.
-        alpha: Transparency of the overlay.
-        res: Resolution of the DEM in meters.
-        figsize: Figure size as (width, height).
+    from .retrogression_visualization import plot_hillshade_overlay as _plot_hillshade_overlay
 
-    Returns:
-        Matplotlib Figure object.
-    """
-    import matplotlib.colors as mcolors
-    from matplotlib.colors import LightSource
-
-    current_backend = plt.get_backend()
-    plt.switch_backend("Agg")
-
-    cmap = mcolors.ListedColormap(["none", "red"])
-    bounds = [-0.5, 0.5, 1.5]
-    norm = mcolors.BoundaryNorm(bounds, cmap.N)
-
-    ls = LightSource(azdeg=315, altdeg=45)
-
-    fig, ax = plt.subplots(figsize=figsize)
-    _ = ax.imshow(ls.hillshade(dem, vert_exag=ve, dx=res, dy=res), cmap="gray")
-    _ = ax.imshow(overlay, cmap=cmap, norm=norm, alpha=alpha)
-
-    plt.switch_backend(current_backend)
-
-    return fig
+    return _plot_hillshade_overlay(
+        dem=dem,
+        overlay=overlay,
+        ve=ve,
+        alpha=alpha,
+        res=res,
+        figsize=figsize,
+    )
 
 
 def gen_animation(
@@ -638,50 +569,16 @@ def gen_animation(
     skip_frames: int = 10,
     filename: str | None = None,
 ) -> list:
-    """Generate a GIF animation from retrogression frames.
+    """Generate a GIF animation from retrogression frames."""
 
-    Args:
-        dem: DEM elevation array.
-        animation: List of numpy arrays with retrogression steps.
-        skip_frames: Number of frames to skip between captures.
-        filename: Output GIF filename. None to skip saving.
+    from .retrogression_visualization import gen_animation as _gen_animation
 
-    Returns:
-        List of PIL Image frames.
-    """
-    fig_list = [plot_hillshade_overlay(dem, ani) for ani in animation[::skip_frames]]
-    frames = []
-
-    for fig in fig_list:
-        buffer = io.BytesIO()
-        fig.savefig(buffer, format="png")
-        buffer.seek(0)
-
-        img = Image.open(buffer)
-        frames.append(img.copy())
-
-        plt.clf()
-
-    if filename is not None:
-        frames[0].save(filename, save_all=True, append_images=frames[1:], loop=0, duration=200)
-    return frames
+    return _gen_animation(dem=dem, animation=animation, skip_frames=skip_frames, filename=filename)
 
 
 def save_frames(dem_array: np.ndarray, animation: list[np.ndarray], out_dir: str, skip_frames: int = 10) -> None:
-    """Save retrogression animation frames as PNG images.
+    """Save retrogression animation frames as PNG images."""
 
-    Args:
-        dem_array: DEM elevation array.
-        animation: List of numpy arrays with retrogression steps.
-        out_dir: Output directory for frame images.
-        skip_frames: Number of frames to skip between saves.
-    """
-    current_backend = plt.get_backend()
-    plt.switch_backend("Agg")
-    os.makedirs(out_dir, exist_ok=True)
-    n_frames = len(animation[::skip_frames])
-    for ii, ani in tqdm(enumerate(animation[::skip_frames]), total=n_frames, desc="saving frames"):
-        fig = plot_hillshade_overlay(dem_array, ani)
-        fig.savefig(f"{out_dir}\\gif_frame_{ii}.png")
-        fig.clf()
-    plt.switch_backend(current_backend)
+    from .retrogression_visualization import save_frames as _save_frames
+
+    _save_frames(dem_array=dem_array, animation=animation, out_dir=out_dir, skip_frames=skip_frames)

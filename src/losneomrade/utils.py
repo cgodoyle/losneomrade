@@ -8,7 +8,6 @@ import numpy as np
 import rasterio
 import rasterio.windows
 from rasterio.features import rasterize, shapes
-from scipy.spatial import distance_matrix
 from shapely.geometry import GeometryCollection, LineString, MultiLineString, MultiPoint, Point
 from shapely.geometry.base import BaseGeometry
 from shapely.ops import linemerge, split
@@ -56,6 +55,8 @@ def compute_slope(coords: np.ndarray, points: np.ndarray, h_min: float = 5, noda
     Returns:
         Array with slopes for each DEM coordinate.
     """
+    from scipy.spatial import distance_matrix
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         xy_1 = coords[:, :2]
@@ -90,6 +91,8 @@ def compute_slope_chunked(
     Returns:
         Array with slopes for each DEM coordinate.
     """
+    from scipy.spatial import distance_matrix
+
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         xy_1 = coords[:, :2]
